@@ -106,6 +106,8 @@ export default function PlaneInstancerWithColor({
       shader.uniforms.alphaMap2 = { value: alphaMap2 };
       shader.uniforms.alphaMap3 = { value: alphaMap3 };
       shader.uniforms.time = { value: 0 };
+      shader.uniforms.cameraPos = { value: new THREE.Vector3() };
+      shader.uniforms.maxEffectDistance = { value: 10.0 };
 
       // Vertex shader: pass UV, position, and texture index
       shader.vertexShader = `
@@ -116,10 +118,13 @@ export default function PlaneInstancerWithColor({
         ${shader.vertexShader.replace(
           "#include <begin_vertex>",
           `
+              #include <begin_vertex>
             vTextureIndex = aTextureIndex;
             vUv = uv;
-            vPos = position;
-            #include <begin_vertex>
+            vec3 vPostemp = (instanceMatrix  * vec4(position, 1.0)).xyz;
+            vPos = (modelMatrix * vec4(vPostemp, 1.0)).xyz;
+         
+        
           `
         )}
       `;
@@ -127,6 +132,7 @@ export default function PlaneInstancerWithColor({
       // Fragment shader: cheap smooth noise + wavy effect
       shader.fragmentShader = `
         uniform float time;
+        uniform vec3 cameraPos;
         varying float vTextureIndex;
         varying vec2 vUv;
         varying vec3 vPos;
@@ -151,6 +157,11 @@ export default function PlaneInstancerWithColor({
         ${shader.fragmentShader.replace(
           "#include <map_fragment>",
           `
+vec2 diff = vPos.xz - cameraPos.xz;
+float radius = 18.0;
+if(length(diff) > radius) discard;
+if(length(diff) < -radius) discard;
+
                float idx = floor(vTextureIndex + 0.5);
         vec4 alphaSample;
         if (idx < 0.5) alphaSample = texture2D(alphaMap, vUv);
@@ -158,9 +169,10 @@ export default function PlaneInstancerWithColor({
         else if (idx < 2.5) alphaSample = texture2D(alphaMap2, vUv);
         else alphaSample = texture2D(alphaMap3, vUv);
 
-        float n = noise2d(vPos.xz * 5.0);
+        float n = noise2d(vPos.xz * 5.0 + time * 0.5);
         float wave = sin(vPos.y*3.0) * 0.03;
         vec2 wavyUv = vec2(vUv.x + n*0.02 + wave, vUv.y);
+
 
         vec4 color;
         if (idx < 0.5) {
@@ -185,12 +197,11 @@ export default function PlaneInstancerWithColor({
   }, [alphaMap, alphaMap1, alphaMap2, alphaMap3, normalMap]);
 
   // Update time uniform every frame safely
-  useFrame(({ clock }) => {
+  useFrame(({ clock, camera }) => {
     if (shaderRef.current) {
       shaderRef.current.uniforms.time.value = clock.getElapsedTime() * 3.0;
+        shaderRef.current.uniforms.cameraPos.value.copy(camera.position);
     }
-
-    console.log({shaderRef})
   });
 
   // Populate instance matrices, colors, texture indices
