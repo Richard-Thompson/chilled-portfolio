@@ -158,7 +158,7 @@ export default function PlaneInstancerWithColor({
         else if (idx < 2.5) alphaSample = texture2D(alphaMap2, vUv);
         else alphaSample = texture2D(alphaMap3, vUv);
 
-        float n = noise2d(vPos.xz * 5.0 + time);
+        float n = noise2d(vPos.xz * 5.0);
         float wave = sin(vPos.y*3.0) * 0.03;
         vec2 wavyUv = vec2(vUv.x + n*0.02 + wave, vUv.y);
 
