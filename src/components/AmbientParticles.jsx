@@ -35,6 +35,8 @@ const AmbientParticles = React.memo(({ spherePosition = null, swarmMode = 'norma
   const pointsRef = useRef();
   const geometryRef = useRef();
   const materialRef = useRef();
+  const previousSwarmMode = useRef('normal');
+  const transitionStart = useRef(0);
   
   // Pre-calculate animation constants
   const animationConstants = useMemo(() => ({
@@ -103,31 +105,59 @@ const AmbientParticles = React.memo(({ spherePosition = null, swarmMode = 'norma
     const { initialPositions, animationOffsets, swarmOffsets, orbitRadii, count } = particleData;
     const { movementRadius, speed, speedY, speedZ } = animationConstants;
     
+    // Check if mode changed and start transition timer
+    if (previousSwarmMode.current !== swarmMode) {
+      transitionStart.current = time;
+      previousSwarmMode.current = swarmMode;
+    }
+    
     // Cache frequently used values
     const timeSpeed = time * speed;
     const timeSpeedY = time * speedY;
     const timeSpeedZ = time * speedZ;
     
     if (swarmMode === 'swarm' && spherePosition) {
-      // Swarm mode: particles directly orbit around the sphere's current position
+      // Swarm mode: particles orbit around the sphere's current position
       const swarmSpeed = 0.8; // Speed of orbital movement
+      const transitionDuration = 2.0; // 2 seconds to fully transition
+      const timeSinceTransition = time - transitionStart.current;
+      const transitionProgress = Math.min(timeSinceTransition / transitionDuration, 1.0);
+      
+      // Use smooth easing for transition
+      const easedProgress = 1 - Math.pow(1 - transitionProgress, 3); // Ease out cubic
+      const lerpSpeed = 0.03; // Smooth transition speed
       
       for (let i = 0; i < count; i++) {
         const i3 = i * 3;
         
-        // Calculate orbital position directly around the sphere's current position
+        // Current particle position
+        const currentX = positions[i3];
+        const currentY = positions[i3 + 1];
+        const currentZ = positions[i3 + 2];
+        
         const orbitRadius = orbitRadii[i];
-        const orbitTime = time * swarmSpeed;
         
-        // Calculate orbital offset from sphere center
-        const orbitX = Math.sin(orbitTime + swarmOffsets[i3]) * orbitRadius;
-        const orbitY = Math.sin(orbitTime * 0.7 + swarmOffsets[i3 + 1]) * orbitRadius * 0.5;
-        const orbitZ = Math.cos(orbitTime + swarmOffsets[i3 + 2]) * orbitRadius;
+        // Always calculate orbital motion from the full timeline (no reset)
+        const fullOrbitTime = (time - transitionStart.current) * swarmSpeed;
+        const orbitX = Math.sin(fullOrbitTime + swarmOffsets[i3]) * orbitRadius;
+        const orbitY = Math.sin(fullOrbitTime * 0.7 + swarmOffsets[i3 + 1]) * orbitRadius * 0.5;
+        const orbitZ = Math.cos(fullOrbitTime + swarmOffsets[i3 + 2]) * orbitRadius;
         
-        // Set particle position directly around the sphere (no lerp/lag)
-        positions[i3] = spherePosition.x + orbitX;
-        positions[i3 + 1] = spherePosition.y + orbitY;
-        positions[i3 + 2] = spherePosition.z + orbitZ;
+        const finalX = spherePosition.x + orbitX;
+        const finalY = spherePosition.y + orbitY;
+        const finalZ = spherePosition.z + orbitZ;
+        
+        if (transitionProgress < 1.0) {
+          // During transition: blend from current position to orbital motion
+          positions[i3] = THREE.MathUtils.lerp(currentX, finalX, easedProgress);
+          positions[i3 + 1] = THREE.MathUtils.lerp(currentY, finalY, easedProgress);
+          positions[i3 + 2] = THREE.MathUtils.lerp(currentZ, finalZ, easedProgress);
+        } else {
+          // After transition: pure orbital motion (already calculated above)
+          positions[i3] = finalX;
+          positions[i3 + 1] = finalY;
+          positions[i3 + 2] = finalZ;
+        }
       }
     } else if (swarmMode === 'reverse') {
       // Reverse swarm mode: particles move back to their original positions and resume normal movement

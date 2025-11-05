@@ -3,11 +3,8 @@ import './SwarmControl.css';
 
 const SwarmControl = ({ swarmMode, onModeChange }) => {
   const handleClick = () => {
-    // Cycle through: normal -> swarm -> reverse -> normal
-    const modes = ['normal', 'swarm', 'reverse'];
-    const currentIndex = modes.indexOf(swarmMode);
-    const nextIndex = (currentIndex + 1) % modes.length;
-    onModeChange(modes[nextIndex]);
+    // Use the passed cycling function
+    onModeChange();
   };
 
   const getModeText = () => {
@@ -31,9 +28,11 @@ const SwarmControl = ({ swarmMode, onModeChange }) => {
       <button 
         className={`swarm-button ${getModeClass()}`}
         onClick={handleClick}
+        title="Click or press SPACE to toggle"
       >
         {getModeText()}
       </button>
+      <div className="keyboard-hint">Press SPACE</div>
     </div>
   );
 };

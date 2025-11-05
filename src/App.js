@@ -64,15 +64,34 @@ function App() {
     console.log(`Performance adjusted to ${level} (${fps} FPS)`);
   }, []);
 
-  // Handle swarm mode changes
-  const handleModeChange = React.useCallback((newMode) => {
-    setSwarmMode(newMode);
-  }, []);
+  // Cycle through swarm modes
+  const cycleSwarmMode = React.useCallback(() => {
+    const modes = ['normal', 'swarm', 'reverse'];
+    const currentIndex = modes.indexOf(swarmMode);
+    const nextIndex = (currentIndex + 1) % modes.length;
+    setSwarmMode(modes[nextIndex]);
+  }, [swarmMode]);
 
   // Handle sphere position updates
   const handleSphereMove = React.useCallback((newPosition) => {
     setSpherePosition(newPosition);
   }, []);
+
+  // Add keyboard event listener for spacebar
+  React.useEffect(() => {
+    const handleKeyPress = (event) => {
+      if (event.code === 'Space' && !event.repeat) {
+        event.preventDefault(); // Prevent page scroll
+        cycleSwarmMode();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [cycleSwarmMode]);
 
   // Memoized particle config based on performance
   const particleConfig = useMemo(() => getParticleConfig(performanceLevel), [performanceLevel]);
@@ -109,7 +128,7 @@ function App() {
         <PerformanceMonitor onPerformanceChange={handlePerformanceChange} />
       </Suspense>
       <Suspense fallback={null}>
-        <SwarmControl swarmMode={swarmMode} onModeChange={handleModeChange} />
+        <SwarmControl swarmMode={swarmMode} onModeChange={cycleSwarmMode} />
       </Suspense>
     </div>
   );
