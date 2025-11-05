@@ -156,6 +156,7 @@ const MovingSphere = React.forwardRef(({ onSphereMove }, ref) => {
     lookAtTarget.y += 0.5; // Look slightly above sphere center
     camera.lookAt(lookAtTarget);
 
+    console.log({sphereTargetRef: sphereTargetRef.current.x})
     // No floating animation - maintain exact 1.2 height above ground
   });
 

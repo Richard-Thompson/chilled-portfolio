@@ -6,8 +6,6 @@ import MovingSphere from "./MovingSphere";
 
 // Performance-optimized constants
 const NEEDS_NORMALIZE = false;
-const CAMERA_RADIUS = 100.0; // Much larger radius for moving camera system
-const CAMERA_RADIUS_SQ = CAMERA_RADIUS * CAMERA_RADIUS; // Pre-computed
 const TEXTURE_COUNT = 4;
 const REDUCED_INSTANCE_COUNT = 400000; // Balanced for good coverage and performance
 
@@ -229,6 +227,7 @@ export default function PlaneInstancerWithColor({
     });
 
     mat.onBeforeCompile = (shader) => {
+            shaderRef.current = shader;
 
       // Add uniforms efficiently with wave parameters
       Object.assign(shader.uniforms, {
@@ -238,8 +237,7 @@ export default function PlaneInstancerWithColor({
         alphaMap3: { value: alphaMap3 },
         time: { value: 0 },
         cameraPos: { value: new THREE.Vector3() },
-        cameraRadius: { value: CAMERA_RADIUS },
-        cameraRadiusSq: { value: CAMERA_RADIUS * CAMERA_RADIUS }, // Pre-computed for performance
+        spherePos: { value: new THREE.Vector3() },
         waveStrength: { value: DEFAULT_WAVE_STRENGTH },
         waveSpeed: { value: DEFAULT_WAVE_SPEED },
         waveScale: { value: DEFAULT_WAVE_SCALE }
@@ -254,10 +252,13 @@ export default function PlaneInstancerWithColor({
         ${shader.vertexShader.replace(
           "#include <begin_vertex>",
           `
-            #include <begin_vertex>
             vTextureIndex = aTextureIndex;
             vUv = uv;
-            vPos = (modelMatrix * instanceMatrix * vec4(position, 1.0)).xyz;
+          vec3 pos = position.xzy;
+            vPos = (instanceMatrix * vec4(position, 1.0)).xyz;
+
+                        #include <begin_vertex>
+
           `
         )}
       `;
@@ -266,8 +267,6 @@ export default function PlaneInstancerWithColor({
       shader.fragmentShader = `
         uniform float time;
         uniform vec3 cameraPos;
-        uniform float cameraRadius;
-        uniform float cameraRadiusSq;
         uniform float waveStrength;
         uniform float waveSpeed;
         uniform float waveScale;
@@ -285,32 +284,19 @@ export default function PlaneInstancerWithColor({
         ${shader.fragmentShader.replace(
           "#include <map_fragment>",
           `
-            // Dynamic grass culling around moving camera
-            vec2 diff = vPos.xz - cameraPos.xz;
-            float distSq = dot(diff, diff);
-            // Much larger radius for moving camera system - grass follows camera
-            if (distSq > cameraRadiusSq * 1.5) discard;
-
             // Optimized texture sampling with single branch
             float idx = floor(vTextureIndex + 0.5);
             
-            // Ultra-optimized wavy effect with distance-based LOD
+            // Ultra-optimized wavy effect
             // Pre-compute time-based values to avoid redundant calculations
             float timeWave = time * waveSpeed;
             vec2 scaledPos = vPos.xz * waveScale;
             
-            // Improved LOD system for better grass coverage
-            float lodFactor = 1.0 - smoothstep(0.0, cameraRadiusSq * 1.0, distSq);
-            float adjustedWaveStrength = waveStrength * max(0.3, lodFactor); // Minimum wave strength
-            
-            // More permissive wave calculation for better grass animation
-            vec2 waveOffset = vec2(0.0);
-            if (lodFactor > 0.05) { // More permissive threshold
-              waveOffset = vec2(
-                turbulence(scaledPos, timeWave) * adjustedWaveStrength,
-                sin(vPos.x * 4.0 + timeWave * 1.5) * (adjustedWaveStrength * 0.5)
-              );
-            }
+            // Simplified wave calculation with consistent strength across all grass
+            vec2 waveOffset = vec2(
+              turbulence(scaledPos, timeWave) * waveStrength,
+              sin(vPos.x * 4.0 + timeWave * 1.5) * (waveStrength * 0.5)
+            );
             
             vec2 wavyUv = vUv + waveOffset;
             
@@ -331,18 +317,13 @@ export default function PlaneInstancerWithColor({
       `;
       
       // Store shader reference for frame updates
-      shaderRef.current = shader;
     };
 
     return mat;
   }, [alphaMap, alphaMap1, alphaMap2, alphaMap3, normalMap]);
 
-  // Responsive frame loop for moving camera system
+  // Simplified frame loop
   const frameCounter = useRef(0);
-  const lastCameraUpdate = useRef(0);
-  const lastCameraPosition = useRef(new THREE.Vector3());
-  const cameraUpdateThreshold = 0.016; // ~60fps for responsive camera tracking
-  const cameraMovementThreshold = 0.001; // Very small threshold for moving camera
   
   useFrame(({ clock, camera }) => {
     const shader = shaderRef.current;
@@ -356,7 +337,7 @@ export default function PlaneInstancerWithColor({
       shader.uniforms.time.value = currentTime * 2.5;
     }
     
-    // ALWAYS update camera position for MovingSphere system - no throttling
+    // Update camera position for MovingSphere system
     shader.uniforms.cameraPos.value.copy(camera.position);
   });
 
@@ -412,8 +393,9 @@ export default function PlaneInstancerWithColor({
   // Handle sphere movement updates
   const handleSphereMove = useCallback((newPosition) => {
     // Optional: Log sphere movement or trigger other effects
-    console.log('Sphere moved to:', newPosition);
-  }, []);
+    console.log('Sphere moved to:', newPosition.x);
+    console.log({newPosition});
+  });
 
   return (
     <>
@@ -429,6 +411,7 @@ export default function PlaneInstancerWithColor({
           args={[geometry, material, safeCount]}
           castShadow={castShadow}
           receiveShadow={receiveShadow}
+          frustumCulled={false}
         />
       </group>
 
