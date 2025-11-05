@@ -96,7 +96,7 @@ const MovingSphere = React.forwardRef(({ onSphereMove }, ref) => {
         if (child.isMesh && child.geometry) {
           // Look for the Ground mesh from the base model
           if (child.geometry.type === 'BufferGeometry' && !child.name.includes('grass')) {
-            console.log('Found base mesh:', child);
+            // console.log('Found base mesh:', child);
             baseMeshRef.current = child;
           }
         }
@@ -132,7 +132,7 @@ const MovingSphere = React.forwardRef(({ onSphereMove }, ref) => {
         nextYHeight = groundHeight + 1.2; // 1.2 units above the actual ground surface
         
         // Debug logging to verify correct height calculation
-        console.log(`XZ: (${nextX.toFixed(2)}, ${nextZ.toFixed(2)}), Ground: ${groundHeight.toFixed(3)}, Sphere: ${nextYHeight.toFixed(3)}`);
+        // console.log(`XZ: (${nextX.toFixed(2)}, ${nextZ.toFixed(2)}), Ground: ${groundHeight.toFixed(3)}, Sphere: ${nextYHeight.toFixed(3)}`);
       } else {
         console.log(`No raycast hit at XZ: (${nextX.toFixed(2)}, ${nextZ.toFixed(2)})`);
       }
@@ -156,7 +156,7 @@ const MovingSphere = React.forwardRef(({ onSphereMove }, ref) => {
     lookAtTarget.y += 0.5; // Look slightly above sphere center
     camera.lookAt(lookAtTarget);
 
-    console.log({sphereTargetRef: sphereTargetRef.current.x})
+    // console.log({sphereTargetRef: sphereTargetRef.current.x})
     // No floating animation - maintain exact 1.2 height above ground
   });
 

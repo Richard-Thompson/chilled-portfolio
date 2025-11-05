@@ -393,8 +393,8 @@ export default function PlaneInstancerWithColor({
   // Handle sphere movement updates
   const handleSphereMove = useCallback((newPosition) => {
     // Optional: Log sphere movement or trigger other effects
-    console.log('Sphere moved to:', newPosition.x);
-    console.log({newPosition});
+    // console.log('Sphere moved to:', newPosition.x);
+    // console.log({newPosition});
   });
 
   return (
