@@ -31,7 +31,7 @@ const createCircleTexture = () => {
 
 const circleTexture = createCircleTexture();
 
-const AmbientParticles = React.memo(() => {
+const AmbientParticles = React.memo(({ spherePosition = null, swarmMode = 'normal' }) => {
   const pointsRef = useRef();
   const geometryRef = useRef();
   const materialRef = useRef();
@@ -47,13 +47,15 @@ const AmbientParticles = React.memo(() => {
   // Optimized data generation with reduced allocations
   const particleData = useMemo(() => {
     const count = 20000; // Back to original 200k particles
-    const containerSize = 50; // 50x50x50 container as originally requested
+    const containerSize = 200; // 50x50x50 container as originally requested
     
     // Use single buffer for all data to improve cache locality
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
     const initialPositions = new Float32Array(count * 3);
     const animationOffsets = new Float32Array(count * 3);
+    const swarmOffsets = new Float32Array(count * 3); // For orbit randomization
+    const orbitRadii = new Float32Array(count); // Individual orbit radius for each particle
     
     // Batch process for better performance
     for (let i = 0; i < count; i++) {
@@ -74,23 +76,31 @@ const AmbientParticles = React.memo(() => {
       animationOffsets[i3 + 1] = Math.random() * 6.283185307179586;
       animationOffsets[i3 + 2] = Math.random() * 6.283185307179586;
       
+      // Swarm mode offsets for random orbital movement
+      swarmOffsets[i3] = Math.random() * 6.283185307179586; // X orbit offset
+      swarmOffsets[i3 + 1] = Math.random() * 6.283185307179586; // Y orbit offset  
+      swarmOffsets[i3 + 2] = Math.random() * 6.283185307179586; // Z orbit offset
+      
+      // Random orbit radius around 2.0 units (1.0 to 3.0 range)
+      orbitRadii[i] = 1.0 + Math.random() * 2.0;
+      
       // Optimized color generation vec3(0.702,0.922,0.949)
       colors[i3] = 0.702;
       colors[i3 + 1] = 0.922;
       colors[i3 + 2] = 0.949;
     }
     
-    return { positions, colors, initialPositions, animationOffsets, count };
+    return { positions, colors, initialPositions, animationOffsets, swarmOffsets, orbitRadii, count };
   }, []);
 
-  // Simple animation loop with smooth movement within 4x4 range
+  // Animation loop with swarm behavior, reverse swarm, and normal movement
   const animationCallback = useCallback((state) => {
     if (!pointsRef.current) return;
     
     const time = state.clock.elapsedTime;
     const positionAttribute = pointsRef.current.geometry.attributes.position;
     const positions = positionAttribute.array;
-    const { initialPositions, animationOffsets, count } = particleData;
+    const { initialPositions, animationOffsets, swarmOffsets, orbitRadii, count } = particleData;
     const { movementRadius, speed, speedY, speedZ } = animationConstants;
     
     // Cache frequently used values
@@ -98,28 +108,83 @@ const AmbientParticles = React.memo(() => {
     const timeSpeedY = time * speedY;
     const timeSpeedZ = time * speedZ;
     
-    // Simple loop with smooth movement around initial positions
-    for (let i = 0; i < count; i++) {
-      const i3 = i * 3;
+    if (swarmMode === 'swarm' && spherePosition) {
+      // Swarm mode: particles directly orbit around the sphere's current position
+      const swarmSpeed = 0.8; // Speed of orbital movement
       
-      // Get initial positions
-      const baseX = initialPositions[i3];
-      const baseY = initialPositions[i3 + 1];
-      const baseZ = initialPositions[i3 + 2];
+      for (let i = 0; i < count; i++) {
+        const i3 = i * 3;
+        
+        // Calculate orbital position directly around the sphere's current position
+        const orbitRadius = orbitRadii[i];
+        const orbitTime = time * swarmSpeed;
+        
+        // Calculate orbital offset from sphere center
+        const orbitX = Math.sin(orbitTime + swarmOffsets[i3]) * orbitRadius;
+        const orbitY = Math.sin(orbitTime * 0.7 + swarmOffsets[i3 + 1]) * orbitRadius * 0.5;
+        const orbitZ = Math.cos(orbitTime + swarmOffsets[i3 + 2]) * orbitRadius;
+        
+        // Set particle position directly around the sphere (no lerp/lag)
+        positions[i3] = spherePosition.x + orbitX;
+        positions[i3 + 1] = spherePosition.y + orbitY;
+        positions[i3 + 2] = spherePosition.z + orbitZ;
+      }
+    } else if (swarmMode === 'reverse') {
+      // Reverse swarm mode: particles move back to their original positions and resume normal movement
+      const returnSpeed = 0.03; // Speed of returning to original positions
       
-      // Calculate smooth movement offsets using sine waves
-      const offsetX = Math.sin(timeSpeed + animationOffsets[i3]) * movementRadius;
-      const offsetY = Math.sin(timeSpeedY + animationOffsets[i3 + 1]) * movementRadius;
-      const offsetZ = Math.sin(timeSpeedZ + animationOffsets[i3 + 2]) * movementRadius;
-      
-      // Apply movement to positions
-      positions[i3] = baseX + offsetX;
-      positions[i3 + 1] = baseY + offsetY;
-      positions[i3 + 2] = baseZ + offsetZ;
+      for (let i = 0; i < count; i++) {
+        const i3 = i * 3;
+        
+        // Current particle position
+        const currentX = positions[i3];
+        const currentY = positions[i3 + 1];
+        const currentZ = positions[i3 + 2];
+        
+        // Get original positions with normal movement
+        const baseX = initialPositions[i3];
+        const baseY = initialPositions[i3 + 1];
+        const baseZ = initialPositions[i3 + 2];
+        
+        // Calculate normal movement offsets
+        const offsetX = Math.sin(timeSpeed + animationOffsets[i3]) * movementRadius;
+        const offsetY = Math.sin(timeSpeedY + animationOffsets[i3 + 1]) * movementRadius;
+        const offsetZ = Math.sin(timeSpeedZ + animationOffsets[i3 + 2]) * movementRadius;
+        
+        // Target positions with normal movement
+        const targetX = baseX + offsetX;
+        const targetY = baseY + offsetY;
+        const targetZ = baseZ + offsetZ;
+        
+        // Smoothly interpolate back to original movement pattern
+        positions[i3] = THREE.MathUtils.lerp(currentX, targetX, returnSpeed);
+        positions[i3 + 1] = THREE.MathUtils.lerp(currentY, targetY, returnSpeed);
+        positions[i3 + 2] = THREE.MathUtils.lerp(currentZ, targetZ, returnSpeed);
+      }
+    } else {
+      // Normal mode: smooth movement around initial positions
+      for (let i = 0; i < count; i++) {
+        const i3 = i * 3;
+        
+        // Get initial positions
+        const baseX = initialPositions[i3];
+        const baseY = initialPositions[i3 + 1];
+        const baseZ = initialPositions[i3 + 2];
+        
+        // Calculate smooth movement offsets using sine waves
+        const offsetX = Math.sin(timeSpeed + animationOffsets[i3]) * movementRadius;
+        const offsetY = Math.sin(timeSpeedY + animationOffsets[i3 + 1]) * movementRadius;
+        const offsetZ = Math.sin(timeSpeedZ + animationOffsets[i3 + 2]) * movementRadius;
+        
+        // Apply movement to positions
+        positions[i3] = baseX + offsetX;
+        positions[i3 + 1] = baseY + offsetY;
+        positions[i3 + 2] = baseZ + offsetZ;
+      }
     }
     
     positionAttribute.needsUpdate = true;
-  }, [particleData, animationConstants]);
+  }, [particleData, animationConstants, swarmMode, spherePosition]);
 
   useFrame(animationCallback);
 

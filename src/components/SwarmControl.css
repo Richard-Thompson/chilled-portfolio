@@ -1,0 +1,56 @@
+.swarm-control {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 1000;
+}
+
+.swarm-button {
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.swarm-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
+}
+
+.swarm-button.swarm {
+  background: rgba(34, 139, 34, 0.3);
+  border-color: rgba(34, 139, 34, 0.6);
+  color: #90EE90;
+}
+
+.swarm-button.swarm:hover {
+  background: rgba(34, 139, 34, 0.4);
+  border-color: rgba(34, 139, 34, 0.8);
+}
+
+.swarm-button.reverse {
+  background: rgba(255, 165, 0, 0.3);
+  border-color: rgba(255, 165, 0, 0.6);
+  color: #FFA500;
+}
+
+.swarm-button.reverse:hover {
+  background: rgba(255, 165, 0, 0.4);
+  border-color: rgba(255, 165, 0, 0.8);
+}
+
+.swarm-button.normal {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}

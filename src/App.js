@@ -10,6 +10,7 @@ const Hdri = React.lazy(() => import('./components/Hdri'));
 // const Controls = React.lazy(() => import('./components/Controls')); // Disabled - MovingSphere controls camera
 const AmbientParticles = React.lazy(() => import('./components/AmbientParticles'));
 const PerformanceMonitor = React.lazy(() => import('./components/PerformanceMonitor'));
+const SwarmControl = React.lazy(() => import('./components/SwarmControl'));
 
 // Pre-computed constants for performance
 const KEYBOARD_MAP = [
@@ -54,11 +55,23 @@ const getParticleConfig = (performanceLevel = 'GOOD') => {
 
 function App() {
   const [performanceLevel, setPerformanceLevel] = React.useState('GOOD');
+  const [swarmMode, setSwarmMode] = React.useState('normal'); // 'normal', 'swarm', 'reverse'
+  const [spherePosition, setSpherePosition] = React.useState(null);
   
   // Handle performance changes and adjust settings automatically
   const handlePerformanceChange = React.useCallback((level, fps) => {
     setPerformanceLevel(level);
     console.log(`Performance adjusted to ${level} (${fps} FPS)`);
+  }, []);
+
+  // Handle swarm mode changes
+  const handleModeChange = React.useCallback((newMode) => {
+    setSwarmMode(newMode);
+  }, []);
+
+  // Handle sphere position updates
+  const handleSphereMove = React.useCallback((newPosition) => {
+    setSpherePosition(newPosition);
   }, []);
 
   // Memoized particle config based on performance
@@ -68,13 +81,17 @@ function App() {
   const sceneComponents = useMemo(() => (
     <Suspense fallback={<LoadingFallback />}>
       <Hdri />
-      <Model />
+      <Model onSphereMove={handleSphereMove} />
       {/* <Sparkles /> */}
-      <AmbientParticles {...particleConfig} />
+      <AmbientParticles 
+        {...particleConfig} 
+        spherePosition={spherePosition}
+        swarmMode={swarmMode}
+      />
       {/* <Controls /> - Disabled: MovingSphere now controls camera */}
       <primitive object={FOG} attach="fog" />
     </Suspense>
-  ), [particleConfig]);
+  ), [particleConfig, spherePosition, swarmMode, handleSphereMove]);
 
   return (
     <div className="App">
@@ -90,6 +107,9 @@ function App() {
       </KeyboardControls>
       <Suspense fallback={null}>
         <PerformanceMonitor onPerformanceChange={handlePerformanceChange} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <SwarmControl swarmMode={swarmMode} onModeChange={handleModeChange} />
       </Suspense>
     </div>
   );

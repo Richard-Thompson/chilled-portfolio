@@ -143,6 +143,11 @@ const MovingSphere = React.forwardRef(({ onSphereMove }, ref) => {
     sphereRef.current.position.z = nextZ;
     sphereRef.current.position.y = nextYHeight;
 
+    // Notify parent of the sphere's current actual position every frame
+    if (onSphereMove) {
+      onSphereMove(sphereRef.current.position.clone());
+    }
+
     // Calculate camera target position
     cameraTargetPosition.copy(sphereRef.current.position);
     cameraTargetPosition.add(cameraOffsetRef.current);

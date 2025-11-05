@@ -94,6 +94,7 @@ export default function PlaneInstancerWithColor({
   planeSize = 2.2, // Increased size for better grass coverage
   castShadow = false,
   receiveShadow = false,
+  onSphereMove = null, // Callback for sphere movement
 }) {
   const meshRef = useRef();
   const shaderRef = useRef();
@@ -392,10 +393,14 @@ export default function PlaneInstancerWithColor({
 
   // Handle sphere movement updates
   const handleSphereMove = useCallback((newPosition) => {
+    // Pass sphere position to parent component (App.js)
+    if (onSphereMove) {
+      onSphereMove(newPosition);
+    }
     // Optional: Log sphere movement or trigger other effects
     // console.log('Sphere moved to:', newPosition.x);
     // console.log({newPosition});
-  });
+  }, [onSphereMove]);
 
   return (
     <>
