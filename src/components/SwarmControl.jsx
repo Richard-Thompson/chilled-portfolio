@@ -1,26 +1,25 @@
 import React from 'react';
 import './SwarmControl.css';
 
-const SwarmControl = ({ swarmMode, onModeChange }) => {
+const SwarmControl = ({ swarmMode, onModeChange, disabled = false }) => {
   const handleClick = () => {
-    // Use the passed cycling function
-    onModeChange();
+    if (!disabled) {
+      onModeChange();
+    }
   };
 
   const getModeText = () => {
-    switch(swarmMode) {
-      case 'swarm': return 'Reverse Swarm';
-      case 'reverse': return 'Normal Mode';
-      default: return 'Swarm Mode';
+    if (swarmMode === 'returning') {
+      return 'Returning...';
     }
+    return swarmMode === 'swarm' ? 'Swarm: ON' : 'Swarm: OFF';
   };
 
   const getModeClass = () => {
-    switch(swarmMode) {
-      case 'swarm': return 'swarm';
-      case 'reverse': return 'reverse';
-      default: return 'normal';
+    if (disabled || swarmMode === 'returning') {
+      return 'disabled';
     }
+    return swarmMode === 'swarm' ? 'swarm' : 'normal';
   };
 
   return (
@@ -28,11 +27,13 @@ const SwarmControl = ({ swarmMode, onModeChange }) => {
       <button 
         className={`swarm-button ${getModeClass()}`}
         onClick={handleClick}
-        title="Click or press SPACE to toggle"
+        disabled={disabled}
+        title={disabled ? "Particles returning to normal..." : "Click or press SPACE to toggle"}
       >
         {getModeText()}
       </button>
       <div className="keyboard-hint">Press SPACE</div>
+      <div className="keyboard-hint">Press C for Controls</div>
     </div>
   );
 };

@@ -63,3 +63,19 @@
   border-color: rgba(69, 86, 92, 0.4);
   color: #556B7D;
 }
+
+.swarm-button.disabled {
+  background: rgba(128, 128, 128, 0.2);
+  border-color: rgba(128, 128, 128, 0.3);
+  color: rgba(128, 128, 128, 0.6);
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.swarm-button.disabled:hover {
+  background: rgba(128, 128, 128, 0.2);
+  border-color: rgba(128, 128, 128, 0.3);
+  transform: none !important;
+  box-shadow: none !important;
+}

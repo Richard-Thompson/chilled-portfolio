@@ -11,6 +11,7 @@ const Hdri = React.lazy(() => import('./components/Hdri'));
 const AmbientParticles = React.lazy(() => import('./components/AmbientParticles'));
 const PerformanceMonitor = React.lazy(() => import('./components/PerformanceMonitor'));
 const SwarmControl = React.lazy(() => import('./components/SwarmControl'));
+const ParticleControls = React.lazy(() => import('./components/ParticleControls'));
 
 // Pre-computed constants for performance
 const KEYBOARD_MAP = [
@@ -55,8 +56,18 @@ const getParticleConfig = (performanceLevel = 'GOOD') => {
 
 function App() {
   const [performanceLevel, setPerformanceLevel] = React.useState('GOOD');
-  const [swarmMode, setSwarmMode] = React.useState('normal'); // 'normal', 'swarm', 'reverse'
+  const [swarmMode, setSwarmMode] = React.useState('normal'); // 'normal', 'swarm', 'returning'
+  const [isSwarmButtonDisabled, setIsSwarmButtonDisabled] = React.useState(false);
   const [spherePosition, setSpherePosition] = React.useState(null);
+  const [showControls, setShowControls] = React.useState(false);
+  const [particleControls, setParticleControls] = React.useState({
+    speed: 0.8,
+    chaos: 1.5,
+    orbitSize: 2.0,
+    attraction: 1.0,
+    complexity: 1.0,
+    pulse: 0.4
+  });
   
   // Handle performance changes and adjust settings automatically
   const handlePerformanceChange = React.useCallback((level, fps) => {
@@ -64,25 +75,48 @@ function App() {
     console.log(`Performance adjusted to ${level} (${fps} FPS)`);
   }, []);
 
-  // Cycle through swarm modes
+  // Toggle swarm mode on/off (normal <-> swarm)
   const cycleSwarmMode = React.useCallback(() => {
-    const modes = ['normal', 'swarm', 'reverse'];
-    const currentIndex = modes.indexOf(swarmMode);
-    const nextIndex = (currentIndex + 1) % modes.length;
-    setSwarmMode(modes[nextIndex]);
-  }, [swarmMode]);
+    if (isSwarmButtonDisabled) return; // Don't allow toggling while returning
+    
+    setSwarmMode(current => {
+      if (current === 'normal') {
+        return 'swarm';
+      } else if (current === 'swarm') {
+        setIsSwarmButtonDisabled(true); // Disable button during return transition
+        return 'returning';
+      }
+      return current;
+    });
+  }, [isSwarmButtonDisabled]);
 
   // Handle sphere position updates
   const handleSphereMove = React.useCallback((newPosition) => {
     setSpherePosition(newPosition);
   }, []);
 
-  // Add keyboard event listener for spacebar
+  // Handle particle control changes
+  const handleParticleControlChange = React.useCallback((newControls) => {
+    setParticleControls(newControls);
+  }, []);
+
+  // Handle return transition complete
+  const handleReturnComplete = React.useCallback(() => {
+    console.log('handleReturnComplete called!');
+    setSwarmMode('normal');
+    setIsSwarmButtonDisabled(false);
+  }, []);
+
+  // Add keyboard event listener for spacebar and controls toggle
   React.useEffect(() => {
     const handleKeyPress = (event) => {
       if (event.code === 'Space' && !event.repeat) {
         event.preventDefault(); // Prevent page scroll
         cycleSwarmMode();
+      }
+      if (event.code === 'KeyC' && !event.repeat) {
+        event.preventDefault();
+        setShowControls(prev => !prev); // Toggle controls with 'C' key
       }
     };
 
@@ -106,11 +140,13 @@ function App() {
         {...particleConfig} 
         spherePosition={spherePosition}
         swarmMode={swarmMode}
+        controls={particleControls}
+        onReturnComplete={handleReturnComplete}
       />
       {/* <Controls /> - Disabled: MovingSphere now controls camera */}
       <primitive object={FOG} attach="fog" />
     </Suspense>
-  ), [particleConfig, spherePosition, swarmMode, handleSphereMove]);
+  ), [particleConfig, spherePosition, swarmMode, particleControls, handleSphereMove]);
 
   return (
     <div className="App">
@@ -128,7 +164,14 @@ function App() {
         <PerformanceMonitor onPerformanceChange={handlePerformanceChange} />
       </Suspense>
       <Suspense fallback={null}>
-        <SwarmControl swarmMode={swarmMode} onModeChange={cycleSwarmMode} />
+        <SwarmControl swarmMode={swarmMode} onModeChange={cycleSwarmMode} disabled={isSwarmButtonDisabled} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <ParticleControls 
+          controls={particleControls}
+          onControlChange={handleParticleControlChange}
+          isVisible={showControls}
+        />
       </Suspense>
     </div>
   );
