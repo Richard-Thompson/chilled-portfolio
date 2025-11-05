@@ -230,7 +230,7 @@ export default function PlaneInstancerWithColor({
     mat.onBeforeCompile = (shader) => {
             shaderRef.current = shader;
 
-      // Add uniforms efficiently with wave parameters
+      // Add uniforms efficiently with wave parameters and grass bending
       Object.assign(shader.uniforms, {
         alphaMap: { value: alphaMap },
         alphaMap1: { value: alphaMap1 },
@@ -241,25 +241,60 @@ export default function PlaneInstancerWithColor({
         spherePos: { value: new THREE.Vector3() },
         waveStrength: { value: DEFAULT_WAVE_STRENGTH },
         waveSpeed: { value: DEFAULT_WAVE_SPEED },
-        waveScale: { value: DEFAULT_WAVE_SCALE }
+        waveScale: { value: DEFAULT_WAVE_SCALE },
+        bendRadius: { value: 5.0 },
+        bendStrength: { value: 3.0 }
       });
 
-      // Optimized vertex shader
+      // Optimized vertex shader with grass bending
       shader.vertexShader = `
         attribute float aTextureIndex;
         varying float vTextureIndex;
         varying vec2 vUv;
         varying vec3 vPos;
+        uniform vec3 spherePos;
+        uniform float bendRadius;
+        uniform float bendStrength;
+        
         ${shader.vertexShader.replace(
           "#include <begin_vertex>",
           `
-            vTextureIndex = aTextureIndex;
+                      #include <begin_vertex>
+ 
+          vTextureIndex = aTextureIndex;
             vUv = uv;
-          vec3 pos = position.xzy;
-            vPos = (instanceMatrix * vec4(position, 1.0)).xyz;
-
-                        #include <begin_vertex>
-
+            
+            // Start with original position
+            vec3 bentPosition = position;
+            
+            // Calculate world position of this grass instance
+            vec4 worldPos = instanceMatrix * vec4(position, 1.0);
+            vPos = worldPos.xyz;
+            
+            // Account for grass group rotation: [-PI/2, 0, 0] 
+            // This rotates XYZ -> XZY (Y and Z are swapped)
+            // Sphere is in world space, grass is rotated, so we need to transform sphere pos
+            vec3 transformedSpherePos = vec3(spherePos.x, spherePos.z, -spherePos.y + 0.35);
+            
+            // Calculate distance from grass to sphere (XZ plane in grass space)
+            vec2 grassXZ = worldPos.xz;
+            vec2 sphereXZ = transformedSpherePos.xz;
+            float distance = length(grassXZ - sphereXZ);
+            
+            // Apply bending if grass is within radius
+            if (distance < bendRadius) {
+              // Direction away from sphere
+              vec2 bendDir = normalize(grassXZ - sphereXZ);
+              
+              // Bend strength: stronger closer to sphere, affects top of grass more
+              float strength = (1.0 - distance / bendRadius) * bendStrength * uv.y;
+              
+              // Apply bending (simple X,Z displacement)
+              bentPosition.x += bendDir.x * strength;
+              bentPosition.z += bendDir.y * strength;
+            }
+            
+            transformed = bentPosition;
           `
         )}
       `;
@@ -325,6 +360,7 @@ export default function PlaneInstancerWithColor({
 
   // Simplified frame loop
   const frameCounter = useRef(0);
+  const spherePosRef = useRef(new THREE.Vector3(0, 1.2, 0)); // Initialize with default sphere starting position
   
   useFrame(({ clock, camera }) => {
     const shader = shaderRef.current;
@@ -332,14 +368,29 @@ export default function PlaneInstancerWithColor({
     
     const currentTime = clock.getElapsedTime();
     
-    // Update time animation (can be less frequent)
+    // Update time animation
     frameCounter.current++;
     if (frameCounter.current % UPDATE_FREQUENCY === 0) {
       shader.uniforms.time.value = currentTime * 2.5;
     }
     
-    // Update camera position for MovingSphere system
+    // Update camera and sphere position for grass bending
     shader.uniforms.cameraPos.value.copy(camera.position);
+    shader.uniforms.spherePos.value.copy(spherePosRef.current);
+    
+    // Debug: Log sphere position every 60 frames
+    if (frameCounter.current % 60 === 0) {
+      console.log('Shader uniform spherePos:', {
+        x: shader.uniforms.spherePos.value.x.toFixed(2),
+        y: shader.uniforms.spherePos.value.y.toFixed(2), 
+        z: shader.uniforms.spherePos.value.z.toFixed(2)
+      });
+      console.log('spherePosRef:', {
+        x: spherePosRef.current.x.toFixed(2),
+        y: spherePosRef.current.y.toFixed(2),
+        z: spherePosRef.current.z.toFixed(2)
+      });
+    }
   });
 
   // Optimized instance data setup with early returns
@@ -393,13 +444,20 @@ export default function PlaneInstancerWithColor({
 
   // Handle sphere movement updates
   const handleSphereMove = useCallback((newPosition) => {
-    // Pass sphere position to parent component (App.js)
+    // Debug: Log sphere movement
+    console.log('🌀 Sphere moved to:', {
+      x: newPosition.x.toFixed(2),
+      y: newPosition.y.toFixed(2),
+      z: newPosition.z.toFixed(2)
+    });
+    
+    // Update sphere position for grass bending
+    spherePosRef.current.copy(newPosition);
+    
+    // Pass sphere position to parent component
     if (onSphereMove) {
       onSphereMove(newPosition);
     }
-    // Optional: Log sphere movement or trigger other effects
-    // console.log('Sphere moved to:', newPosition.x);
-    // console.log({newPosition});
   }, [onSphereMove]);
 
   return (

@@ -330,7 +330,10 @@ const AmbientParticles = React.memo(({ spherePosition = null, swarmMode = 'norma
         positions[i3 + 2] = THREE.MathUtils.lerp(currentZ, targetZ, returnSpeed);
       }
     } else {
-      // Normal mode: smooth movement around initial positions  
+      // Normal mode: smooth movement around initial positions with grass bending
+      const bendRadius = 2.0; // Distance within which grass bends away from sphere
+      const maxBendStrength = 1.5; // Maximum bending displacement
+      
       for (let i = 0; i < count; i++) {
         const i3 = i * 3;
         
@@ -344,10 +347,45 @@ const AmbientParticles = React.memo(({ spherePosition = null, swarmMode = 'norma
         const offsetY = Math.sin(timeSpeedY + animationOffsets[i3 + 1]) * movementRadius;
         const offsetZ = Math.sin(timeSpeedZ + animationOffsets[i3 + 2]) * movementRadius;
         
-        // Apply movement to positions
-        positions[i3] = baseX + offsetX;
-        positions[i3 + 1] = baseY + offsetY;
-        positions[i3 + 2] = baseZ + offsetZ;
+        // Base positions with normal movement
+        let finalX = baseX + offsetX;
+        let finalY = baseY + offsetY;
+        let finalZ = baseZ + offsetZ;
+        
+        // Apply grass bending effect if sphere position is available
+        if (spherePosition) {
+          // Calculate distance from particle to sphere
+          const deltaX = finalX - spherePosition.x;
+          const deltaY = finalY - spherePosition.y;
+          const deltaZ = finalZ - spherePosition.z;
+          const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+          
+          // Apply bending if within bend radius
+          if (distance < bendRadius && distance > 0) {
+            // Calculate normalized direction away from sphere
+            const dirX = deltaX / distance;
+            const dirY = deltaY / distance;
+            const dirZ = deltaZ / distance;
+            
+            // Calculate bend strength (stronger when closer to sphere)
+            const bendStrength = ((bendRadius - distance) / bendRadius) * maxBendStrength;
+            
+            // Apply smooth falloff using smoothstep function
+            const t = distance / bendRadius;
+            const smoothFalloff = 1.0 - (t * t * (3.0 - 2.0 * t));
+            const finalBendStrength = bendStrength * smoothFalloff;
+            
+            // Apply bending displacement away from sphere
+            finalX += dirX * finalBendStrength;
+            finalY += dirY * finalBendStrength;
+            finalZ += dirZ * finalBendStrength;
+          }
+        }
+        
+        // Apply final positions
+        positions[i3] = finalX;
+        positions[i3 + 1] = finalY;
+        positions[i3 + 2] = finalZ;
       }
     }
     
