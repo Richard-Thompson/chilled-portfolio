@@ -1,7 +1,7 @@
 import React, { Suspense, memo, useMemo } from 'react';
 import './App.css';
 import * as THREE from 'three';
-import { KeyboardControls } from '@react-three/drei';
+import { KeyboardControls, Sparkles } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
 
 // Lazy load components for code splitting and faster initial load
@@ -69,6 +69,7 @@ function App() {
     <Suspense fallback={<LoadingFallback />}>
       <Hdri />
       <Model />
+      {/* <Sparkles /> */}
       <AmbientParticles {...particleConfig} />
       {/* <Controls /> - Disabled: MovingSphere now controls camera */}
       <primitive object={FOG} attach="fog" />
@@ -81,7 +82,7 @@ function App() {
         <Canvas 
           gl={GL_CONFIG} 
           camera={CAMERA_CONFIG}
-          dpr={[1, 2]} // Limit device pixel ratio for performance
+          dpr={[1, 1]} // Limit device pixel ratio for performance
           performance={{ min: 0.5 }} // Performance monitoring
         >
           {sceneComponents}

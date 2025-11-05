@@ -1,211 +1,249 @@
-import React, { useRef, useMemo, useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
+import React, { useRef, useEffect, useMemo } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
+import { ShaderMaterial, WebGLRenderTarget, PlaneGeometry, Mesh, DataTexture, FloatType, RGBAFormat, UnsignedByteType, NearestFilter, LinearFilter, Color } from 'three';
 import * as THREE from 'three';
+// Vertex shader that passes through texture coordinates
+const vertexShader = `
+  varying vec2 texCoord;
+  void main() {
+    texCoord = (position.xy + 1.0) / 2.0;
+    gl_Position = vec4(position, 1.0);
+  }
+`;
 
-/**
- * Optimized Ambient Particle System with Light Green Variations
- * 
- * Features:
- * - Randomly moving particles with smooth motion
- * - Multiple shades of light green colors
- * - Efficient instanced rendering for performance
- * - Configurable particle count and behavior
- * - Smooth fade in/out effects
- * - Depth-based opacity for atmospheric effect
- */
-
-// Performance-optimized constants for smooth particles
-const PARTICLE_COUNT = 100; // Increased for better atmosphere
-const MOVEMENT_SPEED = 0.15; // Slower for smoother motion
-const MOVEMENT_RANGE = 25; // Larger range for better coverage
-const PARTICLE_SIZE = 0.05; // Smaller for better performance
-const FADE_DISTANCE = 18; // Better fade distance
-const UPDATE_SKIP_FRAMES = 1; // Reduced skipping for smoother animation
-
-// Light green color variations
-const GREEN_COLORS = [
-  new THREE.Color(0x90EE90), // Light green
-  new THREE.Color(0x98FB98), // Pale green
-  new THREE.Color(0xADFF2F), // Green yellow
-  new THREE.Color(0x00FF7F), // Spring green
-  new THREE.Color(0x7CFC00), // Lawn green
-  new THREE.Color(0x32CD32), // Lime green
-  new THREE.Color(0x00FA9A), // Medium spring green
-  new THREE.Color(0x66CDAA), // Medium aquamarine
-];
-
-export default function AmbientParticles({ 
-  count = PARTICLE_COUNT,
-  speed = MOVEMENT_SPEED,
-  range = MOVEMENT_RANGE,
-  size = PARTICLE_SIZE,
-  fadeDistance = FADE_DISTANCE,
-  opacity = 0.6
-}) {
-  const meshRef = useRef();
-  const particleData = useRef([]);
-  const timeRef = useRef(0);
-
-  // Memoized geometry and material for performance
-  const geometry = useMemo(() => new THREE.SphereGeometry(size, 8, 6), [size]);
-  
-  const material = useMemo(() => {
-    return new THREE.MeshBasicMaterial({
-      transparent: true,
-      opacity: opacity,
-      blending: THREE.AdditiveBlending, // Gives a nice glow effect
-      depthWrite: false, // Prevents z-fighting
-      vertexColors: true,
-    });
-  }, [opacity]);
-
-  // Initialize particle data
-  const particlePositions = useMemo(() => {
-    const positions = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 3);
-    const data = [];
-
-    for (let i = 0; i < count; i++) {
-      const i3 = i * 3;
-      
-      // Random initial positions
-      positions[i3] = (Math.random() - 0.5) * range;
-      positions[i3 + 1] = (Math.random() - 0.5) * range * 0.5;
-      positions[i3 + 2] = (Math.random() - 0.5) * range;
-
-      // Random light green color
-      const color = GREEN_COLORS[Math.floor(Math.random() * GREEN_COLORS.length)];
-      colors[i3] = color.r;
-      colors[i3 + 1] = color.g;
-      colors[i3 + 2] = color.b;
-
-      // Store particle movement data for smoother motion
-      data.push({
-        velocity: new THREE.Vector3(
-          (Math.random() - 0.5) * speed * 0.8, // Reduced for smoother motion
-          (Math.random() - 0.5) * speed * 0.2, // Less vertical movement
-          (Math.random() - 0.5) * speed * 0.8
-        ),
-        phase: Math.random() * Math.PI * 2, // Random phase for wave movement
-        amplitude: 0.3 + Math.random() * 0.8, // Smoother amplitude range
-        frequency: 0.4 + Math.random() * 0.6, // Slower frequency for smoothness
-        baseOpacity: 0.4 + Math.random() * 0.5, // More consistent opacity
-        smoothTarget: new THREE.Vector3(), // For smooth interpolation
-      });
+// Simulation Shader
+const simulationShader = {
+  uniforms: {
+    particleData: { value: null }
+  },
+  vertexShader,
+  fragmentShader: `
+    precision highp float;
+    uniform sampler2D particleData;
+    varying vec2 texCoord;
+    void main() {
+      vec4 pos = texture2D(particleData, texCoord);
+      float velocity = 1.0;
+      vec3 newPos = pos.xyz + pos.xyz * 0.8;
+      gl_FragColor = vec4(newPos, velocity);
     }
+  `,
+};
 
-    particleData.current = data;
-    return { positions, colors };
-  }, [count, range, speed]);
+const rVertexShader = `
+  varying vec2 texCoord;
+  uniform sampler2D particleData;
 
-  // Set up instanced mesh
+  void main() {
+    texCoord = (position.xy + 1.0) / 2.0;
+    vec4 pos = texture(particleData, texCoord);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = 10.0;
+  }
+`;
+
+// Render Shader
+const renderShader = {
+  uniforms: {
+    particleData: { value: null },
+    cameraWorldMatrix: { value: null },
+    cameraProjectionMatrixInverse: { value: null },
+    uResolution: { value: null },
+  },
+  vertexShader: rVertexShader,
+  fragmentShader: `
+precision highp float;
+
+uniform sampler2D particleData;
+uniform mat4 cameraWorldMatrix;
+uniform mat4 cameraProjectionMatrixInverse;
+uniform vec2 uResolution;
+varying vec2 texCoord;
+
+void main() {
+  vec2 uv =( gl_FragCoord.xy * 2.0 - (uResolution - vec2(0.5,0.5)) ) / uResolution;
+
+  vec4 pos = texture2D(particleData, texCoord);
+
+  gl_FragColor = vec4(1.0, 0.0, 0.0,1.0);
+}
+  `,
+};
+
+const ParticleSimulation = () => {
+  const simulationMaterialRef = useRef();
+  const particleTextureRef = useRef();
+  const renderTargetRef = useRef();
+  const planeMeshRef = useRef();
+  const shaderRef = useRef();
+  const { size } = useThree();
+
   useEffect(() => {
-    const mesh = meshRef.current;
-    if (!mesh) return;
+    const width = 512;
+    const height = 512;
 
-    // Set instance count
-    mesh.count = count;
-
-    // Set initial matrices and colors
-    const dummy = new THREE.Object3D();
-    const { positions, colors } = particlePositions;
-
-    for (let i = 0; i < count; i++) {
-      const i3 = i * 3;
-      
-      dummy.position.set(
-        positions[i3],
-        positions[i3 + 1], 
-        positions[i3 + 2]
-      );
-      dummy.scale.setScalar(0.8 + Math.random() * 0.4); // Random scale variation
-      dummy.updateMatrix();
-      
-      mesh.setMatrixAt(i, dummy.matrix);
+    // Generate random particle data
+    const size = width * height;
+    const data = new Float32Array(size * 4); // RGBA
+    for (let i = 0; i < size; i++) {
+      data[i * 4] = Math.random() * 20.0; // x position in range [-1, 1]
+      data[i * 4 + 1] = Math.random() * 20.0; // y position in range [-1, 1]
+      data[i * 4 + 2] = Math.random() * 20.0; // x velocity in range [-1, 1]
+      data[i * 4 + 3] = Math.random() * 20.0; // y velocity in range [-1, 1]
     }
 
-    // Set colors
-    mesh.geometry.setAttribute('color', new THREE.InstancedBufferAttribute(colors, 3));
-    
-    mesh.instanceMatrix.needsUpdate = true;
-  }, [count, particlePositions]);
+    const particleTexture = new DataTexture(data, width, height, RGBAFormat, FloatType);
+    particleTexture.needsUpdate = true;
+    particleTexture.minFilter = NearestFilter;  // Ensure accurate sampling
+    particleTexture.magFilter = NearestFilter;
+    particleTextureRef.current = particleTexture;
 
-  // Ultra-optimized animation loop with frame skipping
-  const frameSkipCounter = useRef(0);
-  
-  useFrame(({ clock, camera }) => {
-    const mesh = meshRef.current;
-    if (!mesh || !particleData.current || !camera) return;
+    // Create render target for the simulation
+    const renderTarget = new WebGLRenderTarget(width, height);
+    renderTargetRef.current = renderTarget;
+  }, []);
 
-    // Skip frames for better performance
-    frameSkipCounter.current++;
-    if (frameSkipCounter.current % UPDATE_SKIP_FRAMES !== 0) return;
+  const orthoCamera = new THREE.OrthographicCamera(
+    -1,
+    1,
+    1,
+    -1,
+    1 / Math.pow(2, 53),
+    1
+  );
 
-    const time = clock.getElapsedTime();
-    const deltaTime = (time - timeRef.current) * UPDATE_SKIP_FRAMES; // Compensate for skipped frames
-    timeRef.current = time;
+  const sceneRtt = new THREE.Scene();
 
-    const dummy = new THREE.Object3D();
-    const cameraPosition = camera.position;
-    
-    // Process all particles for smoother motion
-    for (let i = 0; i < count; i++) {
-      const data = particleData.current[i];
-      if (!data) continue;
-      
-      // Get current matrix
-      mesh.getMatrixAt(i, dummy.matrix);
-      dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
+  const [geometry] = React.useMemo(() => {
+    const geometry = new THREE.BufferGeometry();
 
-      // Smooth wave-like movement with improved interpolation
-      const waveX = Math.sin(time * data.frequency + data.phase) * data.amplitude * 0.3;
-      const waveY = Math.sin(time * data.frequency * 0.8 + data.phase + 1.0) * data.amplitude * 0.2;
-      const waveZ = Math.cos(time * data.frequency * 0.6 + data.phase) * data.amplitude * 0.3;
-      
-      // Calculate smooth target position
-      data.smoothTarget.copy(dummy.position);
-      data.smoothTarget.x += (data.velocity.x * 2.0 + waveX) * deltaTime;
-      data.smoothTarget.y += (data.velocity.y + waveY) * deltaTime;
-      data.smoothTarget.z += (data.velocity.z * 2.0 + waveZ) * deltaTime;
-      
-      // Smooth interpolation for fluid movement
-      dummy.position.lerp(data.smoothTarget, 0.1);
+    // Create two triangles for a full-screen quad
+    geometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(
+        new Float32Array([
+          -1, -1, 0,  // bottom-left
+           1, -1, 0,  // bottom-right
+           1,  1, 0,  // top-right
+          -1, -1, 0,  // bottom-left
+           1,  1, 0,  // top-right
+          -1,  1, 0,  // top-left
+        ]),
+        3
+      )
+    );
+    geometry.setAttribute(
+      "uv",
+      new THREE.BufferAttribute(
+        new Float32Array([
+          0, 0,  // bottom-left
+          1, 0,  // bottom-right
+          1, 1,  // top-right
+          0, 0,  // bottom-left
+          1, 1,  // top-right
+          0, 1,  // top-left
+        ]),
+        2
+      )
+    );
 
-      // Smooth boundary wrapping for seamless infinite effect
-      const halfRange = range / 2;
-      const quarterRange = range / 4;
-      
-      if (Math.abs(dummy.position.x) > halfRange) {
-        dummy.position.x = THREE.MathUtils.lerp(dummy.position.x, -dummy.position.x * 0.8, 0.1);
-      }
-      if (Math.abs(dummy.position.y) > quarterRange) {
-        dummy.position.y = THREE.MathUtils.lerp(dummy.position.y, -dummy.position.y * 0.8, 0.1);
-      }
-      if (Math.abs(dummy.position.z) > halfRange) {
-        dummy.position.z = THREE.MathUtils.lerp(dummy.position.z, -dummy.position.z * 0.8, 0.1);
-      }
+    return [geometry];
+  }, []);
 
-      // Smooth distance-based scaling and opacity
-      const distance = dummy.position.distanceTo(cameraPosition);
-      const fadeFactor = Math.max(0.1, 1 - distance / fadeDistance);
-      const baseScale = 0.6 + fadeFactor * 0.4;
-      const currentScale = dummy.scale.x;
-      const targetScale = baseScale * (0.9 + Math.sin(time * 2 + data.phase) * 0.1);
-      const smoothScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.05);
-      
-      dummy.scale.setScalar(smoothScale);
-      dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
+  const simShader = new THREE.ShaderMaterial(simulationShader)
+
+  sceneRtt.add(new THREE.Mesh(geometry, simShader));
+  sceneRtt.add(orthoCamera);
+
+  useFrame(({ gl, scene, camera }) => {
+    if (!particleTextureRef.current || !renderTargetRef.current || !planeMeshRef.current) {
+      return;
     }
 
-    mesh.instanceMatrix.needsUpdate = true;
+    // Render simulation pass
+    simShader.uniforms.particleData.value = particleTextureRef.current;
+    gl.setRenderTarget(renderTargetRef.current);
+    gl.clear();
+    gl.render(sceneRtt, orthoCamera);
+
+    // Render to the screen
+    shaderRef.current.uniforms.particleData.value = renderTargetRef.current.texture;
+    shaderRef.current.uniforms.cameraWorldMatrix.value =
+        camera.matrixWorld.clone();
+    shaderRef.current.uniforms.cameraProjectionMatrixInverse.value = new THREE.Matrix4().copy(camera.projectionMatrix.clone()).invert();
+    shaderRef.current.uniforms.uResolution.value = new THREE.Vector2(size.width, size.height);
+
+
+    if (planeMeshRef.current) {
+    //   planeMeshRef.current.material = renderPass;
+      gl.setRenderTarget(null);
+      gl.clear();
+      gl.render(scene, camera);
+    }
   });
 
+    const positions = useMemo(() => {
+        const count = 12000;
+        const distance = 2.0;
+        const positions = new Float32Array(count * 3); // 3 values per point (x, y, z)
+
+        for (let i = 0; i < count; i++) {
+        const x = (Math.random() - 0.5) * 3.0;
+        const y = (Math.random() - 0.5) * 3.0;
+        const z = (Math.random() - 0.5) * 3.0;
+
+        positions.set([x, y, z], i * 3);
+    }
+
+    return positions;
+  }, []);
+
   return (
-    <instancedMesh
-      ref={meshRef}
-      args={[geometry, material, count]}
-      frustumCulled={false} // Prevent culling for better ambient effect
-    />
+    <points>
+        <bufferGeometry>
+            <bufferAttribute
+                attach="attributes-position"
+                array={positions}
+                itemSize={3}
+                count={positions.length / 3}
+                needsUpdate={true}
+            />
+        </bufferGeometry>
+        <shaderMaterial ref={shaderRef} attach="material" args={[renderShader]} />
+    </points>
   );
-}
+  
+
+//   return (
+//     <>
+//         <color attach="background" args={['black']} />
+//      <points>
+//         <bufferGeometry attach="geometry">
+//           <bufferAttribute
+//             attachObject={["attributes", "position"]}
+//             count={positions.length / 4}
+//             itemSize={4}
+//             array={positions}
+//           />
+//         </bufferGeometry>       
+//         <pointsMaterial color="red" size={10}/>
+//       {/* <shaderMaterial attach="material" args={[renderShader]} /> */}
+//       </points>
+//       <OrbitControls />
+//     </>
+//   );
+};
+
+export default ParticleSimulation;
+
+
+
+
+
+
+
+
+
+
+
