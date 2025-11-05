@@ -7,7 +7,7 @@ import React, { useMemo } from 'react'
 import * as THREE from 'three'
 import { useGLTF } from '@react-three/drei'
 
-export function Model(props) {
+export function Model({ onPointerMove, ...props }) {
   const { nodes, materials } = useGLTF('/final-base-1.1.glb')
 
   // Create MeshBasicMaterial that keeps any textures from the original material
@@ -22,7 +22,11 @@ export function Model(props) {
 
   return (
     <group {...props} dispose={null}>
-      <mesh geometry={nodes.Ground.geometry} material={basicMaterial} />
+      <mesh 
+        geometry={nodes.Ground.geometry} 
+        material={basicMaterial}
+        onPointerMove={onPointerMove}
+      />
     </group>
   )
 }
