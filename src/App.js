@@ -12,6 +12,7 @@ const AmbientParticles = React.lazy(() => import('./components/AmbientParticles'
 const PerformanceMonitor = React.lazy(() => import('./components/PerformanceMonitor'));
 const SwarmControl = React.lazy(() => import('./components/SwarmControl'));
 const ParticleControls = React.lazy(() => import('./components/ParticleControls'));
+const PostProcessing = React.lazy(() => import('./components/PostProcessing'));
 
 // Pre-computed constants for performance
 const KEYBOARD_MAP = [
@@ -20,6 +21,8 @@ const KEYBOARD_MAP = [
   { name: 'leftKeyPressed', keys: ['ArrowLeft', 'KeyA'] },
   { name: 'rightKeyPressed', keys: ['ArrowRight', 'KeyD'] },
   { name: 'shiftKeyPressed', keys: ['ShiftLeft', 'ShiftRight'] },
+  { name: 'spaceKeyPressed', keys: ['Space'] },
+  { name: 'controlsTogglePressed', keys: ['KeyC'] },
 ];
 
 const CAMERA_CONFIG = { position: [4, 4, 4], fov: 60 };
@@ -77,15 +80,23 @@ function App() {
 
   // Toggle swarm mode on/off (normal <-> swarm)
   const cycleSwarmMode = React.useCallback(() => {
-    if (isSwarmButtonDisabled) return; // Don't allow toggling while returning
+    console.log('cycleSwarmMode called, current state:', { swarmMode, isSwarmButtonDisabled });
+    if (isSwarmButtonDisabled) {
+      console.log('Swarm button is disabled, not cycling');
+      return; // Don't allow toggling while returning
+    }
     
     setSwarmMode(current => {
+      console.log('Setting swarm mode from:', current);
       if (current === 'normal') {
+        console.log('Switching to swarm mode');
         return 'swarm';
       } else if (current === 'swarm') {
+        console.log('Switching to returning mode');
         setIsSwarmButtonDisabled(true); // Disable button during return transition
         return 'returning';
       }
+      console.log('Staying in current mode:', current);
       return current;
     });
   }, [isSwarmButtonDisabled]);
@@ -110,22 +121,43 @@ function App() {
   // Add keyboard event listener for spacebar and controls toggle
   React.useEffect(() => {
     const handleKeyPress = (event) => {
+      console.log('Key pressed:', event.code, 'target:', event.target.tagName, 'swarmMode:', swarmMode, 'disabled:', isSwarmButtonDisabled);
+      
+      // Make sure we're not in an input field
+      if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+        return;
+      }
+      
       if (event.code === 'Space' && !event.repeat) {
         event.preventDefault(); // Prevent page scroll
+        event.stopPropagation(); // Stop event from bubbling
+        console.log('Spacebar pressed, calling cycleSwarmMode');
         cycleSwarmMode();
       }
       if (event.code === 'KeyC' && !event.repeat) {
         event.preventDefault();
+        event.stopPropagation();
         setShowControls(prev => !prev); // Toggle controls with 'C' key
       }
     };
 
+    // Try both keydown and keyup events
+    const handleKeyUp = (event) => {
+      if (event.code === 'Space' && document.activeElement === document.body) {
+        console.log('Spacebar keyup detected');
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress, true); // Use capture phase
+    document.addEventListener('keyup', handleKeyUp, true);
     window.addEventListener('keydown', handleKeyPress);
     
     return () => {
+      document.removeEventListener('keydown', handleKeyPress, true);
+      document.removeEventListener('keyup', handleKeyUp, true);
       window.removeEventListener('keydown', handleKeyPress);
     };
-  }, [cycleSwarmMode]);
+  }, [cycleSwarmMode, swarmMode, isSwarmButtonDisabled]);
 
   // Memoized particle config based on performance
   const particleConfig = useMemo(() => getParticleConfig(performanceLevel), [performanceLevel]);
@@ -145,6 +177,7 @@ function App() {
       />
       {/* <Controls /> - Disabled: MovingSphere now controls camera */}
       <primitive object={FOG} attach="fog" />
+      <PostProcessing />
     </Suspense>
   ), [particleConfig, spherePosition, swarmMode, particleControls, handleSphereMove]);
 

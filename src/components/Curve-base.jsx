@@ -242,8 +242,17 @@ export default function PlaneInstancerWithColor({
         waveStrength: { value: DEFAULT_WAVE_STRENGTH },
         waveSpeed: { value: DEFAULT_WAVE_SPEED },
         waveScale: { value: DEFAULT_WAVE_SCALE },
-        bendRadius: { value: 3.70 },
-        bendStrength: { value: 0.80 }
+        bendRadius: { value: 4.0 },
+        bendStrength: { value: 1.2 },
+        // Trail system uniforms
+        trailPositions: { value: new Float32Array(60) }, // 20 positions * 3 components
+        trailTimes: { value: new Float32Array(20) }, // Time when each trail point was created
+        trailCount: { value: 0 },
+        currentTime: { value: 0.0 },
+        trailRecoveryTime: { value: 3.0 }, // Time for grass to fully recover
+        // Smooth animation uniforms
+        bendingSpeed: { value: .10 }, // How fast grass transitions to bend positions
+        deltaTime: { value: 0.00096 } // Frame delta time for smooth interpolation
       });
 
       shader.vertexShader = `
@@ -255,6 +264,14 @@ export default function PlaneInstancerWithColor({
   uniform vec3 spherePos;
   uniform float bendRadius;
   uniform float bendStrength;
+  // Trail system uniforms
+  uniform float trailPositions[60]; // Array of vec3 positions flattened
+  uniform float trailTimes[20];
+  uniform float trailCount;
+  uniform float currentTime;
+  uniform float trailRecoveryTime;
+  uniform float bendingSpeed;
+  uniform float deltaTime;
 
   ${shader.vertexShader.replace(
     "#include <begin_vertex>",
@@ -267,25 +284,115 @@ export default function PlaneInstancerWithColor({
       vec3 sPos = spherePos;
       vec3 gPos = (modelMatrix * instanceMatrix * vec4(position, 1.0)).xyz;
 
-      bool isInsideSphere = distance(gPos, sPos) < bendRadius;
+      // Calculate TARGET bending (what the grass wants to bend to)
+      vec2 targetBend = vec2(0.0);
+      float targetIntensity = 0.0;
 
-      // Only bend if within radius
-      if (isInsideSphere) {
-        // Direction away from sphere
-        vec2 bendDir = normalize(gPos.xz - sPos.xz);
+      // Current sphere position effect (strongest)
+      float distanceToSphere = distance(gPos, sPos);
+      if (distanceToSphere < bendRadius) {
+        // Direction FROM sphere TO grass position (outward)
+        vec2 sphereToGrass = gPos.xz - sPos.xz;
+        vec2 bendDir = normalize(sphereToGrass);
 
-        // Bend intensity: falloff with distance
-        float influence = 1.0 - (distance(gPos, sPos) / bendRadius);
+        // Smooth target calculation
+        float normalizedDistance = distanceToSphere / bendRadius;
+        float rawInfluence = 1.0 - normalizedDistance;
+        float influence = rawInfluence * rawInfluence * (3.0 - 2.0 * rawInfluence);
+        influence = smoothstep(0.0, 1.0, influence);
+        
+        targetBend += bendDir * influence;
+        targetIntensity = max(targetIntensity, influence);
+      }
 
+      // Trail positions effect (decaying over time)
+      for (int i = 0; i < 20; i++) {
+        if (float(i) >= trailCount) break;
+        
+        // Get trail position (flattened array: x,y,z,x,y,z,...)
+        int baseIndex = i * 3;
+        vec3 trailPos = vec3(
+          trailPositions[baseIndex], 
+          trailPositions[baseIndex + 1], 
+          trailPositions[baseIndex + 2]
+        );
+        
+        // Calculate time-based decay with natural grass recovery easing
+        float age = currentTime - trailTimes[i];
+        float normalizedAge = clamp(age / trailRecoveryTime, 0.0, 1.0);
+        // Elastic ease-out: grass springs back naturally then settles
+        float decay = 1.0 - (normalizedAge * normalizedAge * normalizedAge * (normalizedAge * (normalizedAge * 6.0 - 15.0) + 10.0));
+        
+        if (decay > 0.0) {
+          float trailDistance = distance(gPos, trailPos);
+          if (trailDistance < bendRadius) {
+            // Direction away from trail position
+            vec2 trailToGrass = gPos.xz - trailPos.xz;
+            vec2 trailBendDir = normalize(trailToGrass);
+            
+            // Smooth trail influence with distance-based easing
+            float normalizedTrailDistance = trailDistance / bendRadius;
+            float distanceInfluence = 1.0 - normalizedTrailDistance;
+            
+            // Apply smooth easing for trail bending transitions
+            distanceInfluence = distanceInfluence * distanceInfluence * (3.0 - 2.0 * distanceInfluence);
+            
+            // Combine with time decay and apply smoothstep
+            float trailInfluence = distanceInfluence * decay * 0.6;
+            trailInfluence = smoothstep(0.0, 1.0, trailInfluence);
+            
+            targetBend += trailBendDir * trailInfluence;
+            targetIntensity = max(targetIntensity, trailInfluence);
+          }
+        }
+      }
+
+      // Apply smooth progressive bending transitions
+      if (targetIntensity > 0.0) {
         // Apply bending only to upper parts (based on vertex height)
-        float heightFactor = position.y; // assuming y=0 at root, 1 at tip
+        float heightFactor = clamp(position.y, 0.0, 1.0);
 
-        // Final bend strength
-        float bend = bendStrength * influence * heightFactor;
+        // Create progressive bending animation
+        // Simulate grass gradually responding to force over time
+        
+        // Use sphere distance to create animation trigger
+        float sphereDist = distance(gPos, sPos);
+        float animationIntensity = 1.0;
+        
+        if (sphereDist < bendRadius) {
+          // Create smooth build-up animation as sphere approaches
+          float distanceFactor = 1.0 - (sphereDist / bendRadius);
+          
+          // Progressive animation - grass bends more over time
+          // Use a wave function that builds up as sphere gets closer
+          float animationPhase = currentTime * 6.0 - (sphereDist * 2.0);
+          float buildUp = clamp(animationPhase * 0.3, 0.0, 1.0);
+          
+          // Smooth ease-in animation
+          buildUp = buildUp * buildUp * (3.0 - 2.0 * buildUp);
+          
+          animationIntensity = distanceFactor * buildUp;
+        }
+        
+        // For trail effects, use gradual fade-in
+        float trailAnimation = 1.0;
+        if (targetIntensity < 0.8) { // Trail effects are weaker
+          trailAnimation = smoothstep(0.0, 1.0, targetIntensity * 2.0);
+        }
 
-        // Apply bending in XZ plane
-        transformed.x += bendDir.x * bend;
-        transformed.z += bendDir.y * bend;
+        // Combine animations
+        float finalAnimation = max(animationIntensity, trailAnimation * 0.6);
+        
+        // Calculate final bend with progressive animation
+        vec2 finalBend = targetBend * bendStrength * heightFactor * finalAnimation;
+        
+        // Add subtle wind effect for natural movement
+        float windEffect = sin(currentTime * 1.2 + gPos.x * 0.2 + gPos.z * 0.3) * 0.015;
+        finalBend *= (1.0 + windEffect);
+        
+        // Apply the progressively animated bending
+        transformed.x += finalBend.x;
+        transformed.z += finalBend.y;
       }
     `
   )}
@@ -351,8 +458,16 @@ export default function PlaneInstancerWithColor({
     return mat;
   }, [alphaMap, alphaMap1, alphaMap2, alphaMap3, normalMap]);
 
+  // Trail system state
+  const trailPositions = useRef(new Float32Array(60)); // 20 positions * 3 components
+  const trailTimes = useRef(new Float32Array(20));
+  const trailIndex = useRef(0);
+  const lastRecordedPosition = useRef(new THREE.Vector3());
+  const minTrailDistance = useRef(0.5); // Minimum distance to record new trail point
+
   // Simplified frame loop
   const frameCounter = useRef(0);
+  const lastFrameTime = useRef(0);
   const spherePosRef = useRef(new THREE.Vector3(0, 1.2, 0)); // Initialize with default sphere starting position
   
   useFrame(({ clock, camera }) => {
@@ -360,6 +475,8 @@ export default function PlaneInstancerWithColor({
     if (!shader?.uniforms) return;
     
     const currentTime = clock.getElapsedTime();
+    const deltaTime = currentTime - lastFrameTime.current;
+    lastFrameTime.current = currentTime;
     
     // Update time animation
     frameCounter.current++;
@@ -371,17 +488,43 @@ export default function PlaneInstancerWithColor({
     shader.uniforms.cameraPos.value.copy(camera.position);
     shader.uniforms.spherePos.value.copy(spherePosRef.current);
     
-    // Debug: Log sphere position every 60 frames
-    if (frameCounter.current % 60 === 0) {
-      console.log('Shader uniform spherePos:', {
-        x: shader.uniforms.spherePos.value.x.toFixed(2),
-        y: shader.uniforms.spherePos.value.y.toFixed(2), 
-        z: shader.uniforms.spherePos.value.z.toFixed(2)
-      });
-      console.log('spherePosRef:', {
-        x: spherePosRef.current.x.toFixed(2),
-        y: spherePosRef.current.y.toFixed(2),
-        z: spherePosRef.current.z.toFixed(2)
+    // Trail recording: Record sphere position if it moved enough
+    const currentPos = spherePosRef.current;
+    const distance = currentPos.distanceTo(lastRecordedPosition.current);
+    
+    if (distance > minTrailDistance.current) {
+      // Record new trail point
+      const index = trailIndex.current % 20; // Circular buffer
+      const baseIndex = index * 3;
+      
+      // Store position
+      trailPositions.current[baseIndex] = currentPos.x;
+      trailPositions.current[baseIndex + 1] = currentPos.y;
+      trailPositions.current[baseIndex + 2] = currentPos.z;
+      
+      // Store time
+      trailTimes.current[index] = currentTime;
+      
+      // Update trail uniforms
+      shader.uniforms.trailPositions.value = trailPositions.current;
+      shader.uniforms.trailTimes.value = trailTimes.current;
+      shader.uniforms.trailCount.value = Math.min(trailIndex.current + 1, 20);
+      
+      // Update references
+      lastRecordedPosition.current.copy(currentPos);
+      trailIndex.current++;
+    }
+    
+    // Always update current time for trail decay and delta time for smooth interpolation
+    shader.uniforms.currentTime.value = currentTime;
+    shader.uniforms.deltaTime.value = Math.min(deltaTime, 0.033); // Cap at ~30fps for stability
+    
+    // Debug: Log trail info every 120 frames
+    if (frameCounter.current % 120 === 0) {
+      console.log('Trail system:', {
+        trailCount: Math.min(trailIndex.current, 20),
+        currentPos: `${currentPos.x.toFixed(2)}, ${currentPos.y.toFixed(2)}, ${currentPos.z.toFixed(2)}`,
+        lastTrailTime: trailTimes.current[(trailIndex.current - 1) % 20]?.toFixed(2)
       });
     }
   });

@@ -172,7 +172,7 @@ const MovingSphere = React.forwardRef(({ onSphereMove }, ref) => {
     metalness: 1.0,
     roughness: 0.0,
     emissive: '#fff',
-    emissiveIntensity: 0.1
+    emissiveIntensity: 0.5  // Increased for better bloom visibility
   }), []);
 
   return (

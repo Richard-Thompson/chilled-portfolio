@@ -121,11 +121,14 @@ const AmbientParticles = React.memo(({ spherePosition = null, swarmMode = 'norma
     
     // Check if mode changed and start transition timer
     if (previousSwarmMode.current !== swarmMode) {
-      if (swarmMode === 'returning') {
+      if (swarmMode === 'swarm') {
+        console.log('Starting swarm mode at time:', time);
+        transitionStart.current = time;
+        hasCalledReturnComplete.current = false; // Reset for next cycle
+      } else if (swarmMode === 'returning') {
+        console.log('Starting return mode at time:', time);
         returnTransitionStart.current = time;
         hasCalledReturnComplete.current = false;
-      } else {
-        transitionStart.current = time;
       }
       previousSwarmMode.current = swarmMode;
     }
@@ -138,23 +141,6 @@ const AmbientParticles = React.memo(({ spherePosition = null, swarmMode = 'norma
     if (swarmMode === 'swarm' && spherePosition) {
       // Swarm mode: particles orbit around the sphere's current position
       const swarmSpeed = controls?.speed || 0.8; // Speed of orbital movement (controllable)
-      const transitionDuration = 67.28; // 67.28 seconds total (300% slower - 16.82 * 4)
-      const timeSinceTransition = time - transitionStart.current;
-      const transitionProgress = Math.min(timeSinceTransition / transitionDuration, 1.0);
-      
-      // Tangent curve: very slow start, dramatic ramp in last 10%
-      let easedProgress;
-      if (transitionProgress < 0.9) {
-        // First 90%: very slow tangent curve
-        const normalizedProgress = transitionProgress / 0.9;
-        easedProgress = Math.tan(normalizedProgress * Math.PI * 0.45) / Math.tan(Math.PI * 0.45) * 0.1;
-      } else {
-        // Last 10%: dramatic acceleration
-        const finalProgress = (transitionProgress - 0.9) / 0.1;
-        easedProgress = 0.1 + finalProgress * 0.9;
-      }
-      
-      const lerpSpeed = 0.0008875; // Base smooth transition speed (300% slower - 0.00355 / 4)
       
       for (let i = 0; i < count; i++) {
         const i3 = i * 3;
@@ -166,124 +152,26 @@ const AmbientParticles = React.memo(({ spherePosition = null, swarmMode = 'norma
         
         const orbitRadius = orbitRadii[i];
         
-        // Chaotic spherical interweaving orbital motion
-        const baseTime = (time - transitionStart.current) * swarmSpeed;
-        
-        // Individual speed multipliers for chaos (controllable)
-        const chaosMultiplier = controls?.chaos || 1.0;
-        const speedX = orbitSpeeds[i3] * chaosMultiplier;
-        const speedY = orbitSpeeds[i3 + 1] * chaosMultiplier;
-        const speedZ = orbitSpeeds[i3 + 2] * chaosMultiplier;
-        
-        // Multiple orbital frequencies for interweaving (controllable complexity)
-        const complexityFactor = controls?.complexity || 1.0;
-        const timeX = baseTime * speedX;
-        const timeY = baseTime * speedY * (0.73 * complexityFactor);
-        const timeZ = baseTime * speedZ * (1.19 * complexityFactor);
-        
-        // Spherical coordinates with chaotic variations (controllable)
+        // Simplified smooth swarm motion - particles follow sphere in orbital pattern
+        const swarmTime = time * swarmSpeed;
         const orbitSizeMultiplier = controls?.orbitSize || 2.0;
-        const pulseIntensity = controls?.pulse || 0.4;
-        const scaledOrbitRadius = (orbitRadius / 2.0) * orbitSizeMultiplier; // Scale from default 2.0
+        const radius = orbitRadii[i] * orbitSizeMultiplier;
         
-        const phi = timeX + swarmOffsets[i3]; // Azimuthal angle
-        const theta = Math.sin(timeY * 0.5) * 3.14159 + swarmOffsets[i3 + 1]; // Polar angle (oscillating)
-        const radius = scaledOrbitRadius * (0.8 + pulseIntensity * Math.sin(timeZ + swarmOffsets[i3 + 2])); // Pulsating radius
+        // Simple orbital motion around sphere
+        const angle1 = swarmTime + swarmOffsets[i3];
+        const angle2 = swarmTime * 0.7 + swarmOffsets[i3 + 1];
         
-        // Convert spherical to cartesian with axis tilting
-        let orbitX = radius * Math.sin(theta) * Math.cos(phi);
-        let orbitY = radius * Math.cos(theta);
-        let orbitZ = radius * Math.sin(theta) * Math.sin(phi);
+        // Calculate target orbital position
+        const targetX = spherePosition.x + Math.cos(angle1) * radius;
+        const targetY = spherePosition.y + Math.sin(angle2) * radius * 0.5;
+        const targetZ = spherePosition.z + Math.sin(angle1) * radius;
         
-        // Add secondary orbital layer for more complexity (controllable)
-        const secondaryTime = baseTime * (1.7 * complexityFactor);
-        const secondaryRadius = scaledOrbitRadius * (0.3 * complexityFactor);
-        const secX = secondaryRadius * Math.sin(secondaryTime * 2.1 + swarmOffsets[i3]);
-        const secY = secondaryRadius * Math.cos(secondaryTime * 1.6 + swarmOffsets[i3 + 1]);
-        const secZ = secondaryRadius * Math.sin(secondaryTime * 2.8 + swarmOffsets[i3 + 2]);
+        // Smooth movement towards target with proper interpolation
+        const lerpSpeed = 0.05; // Fixed lerp speed for smooth movement
         
-        // Combine primary and secondary orbits
-        orbitX += secX;
-        orbitY += secY;
-        orbitZ += secZ;
-        
-        // Apply random axis tilting for 3D spherical distribution
-        const tiltX = orbitAxes[i3];
-        const tiltY = orbitAxes[i3 + 1];
-        const tiltZ = orbitAxes[i3 + 2];
-        
-        // Rotate around random axes for true spherical chaos
-        const rotatedX = orbitX + orbitY * tiltZ - orbitZ * tiltY;
-        const rotatedY = orbitY + orbitZ * tiltX - orbitX * tiltZ;
-        const rotatedZ = orbitZ + orbitX * tiltY - orbitY * tiltX;
-        
-        const finalX = spherePosition.x + rotatedX;
-        const finalY = spherePosition.y + rotatedY;
-        const finalZ = spherePosition.z + rotatedZ;
-        
-        if (transitionProgress < 1.0) {
-          // Calculate distance from particle to sphere center
-          const distanceToSphere = Math.sqrt(
-            Math.pow(currentX - spherePosition.x, 2) +
-            Math.pow(currentY - spherePosition.y, 2) +
-            Math.pow(currentZ - spherePosition.z, 2)
-          );
-          
-          // Normalize distance (assuming max distance is around 200 units from container)
-          const normalizedDistance = Math.min(distanceToSphere / 200.0, 1.0);
-          
-          // Gravitational acceleration with tangent curve: extremely slow start, dramatic ramp
-          const attractionMultiplier = controls?.attraction || 1.0;
-          const baseAcceleration = 0.000125 * attractionMultiplier; // Much slower base (300% slower)
-          const maxAcceleration = 0.01125 * attractionMultiplier;  // Higher max for dramatic finish (300% slower)
-          
-          // Apply tangent curve to distance-based acceleration
-          let distanceAcceleration;
-          if (normalizedDistance > 0.1) {
-            // First 90% of distance: very slow tangent approach
-            const distanceProgress = (1.0 - normalizedDistance) / 0.9;
-            distanceAcceleration = Math.tan(distanceProgress * Math.PI * 0.45) / Math.tan(Math.PI * 0.45) * 0.1;
-          } else {
-            // Last 10% of distance: dramatic acceleration
-            const finalDistanceProgress = (0.1 - normalizedDistance) / 0.1;
-            distanceAcceleration = 0.1 + finalDistanceProgress * 0.9;
-          }
-          
-          const accelerationFactor = baseAcceleration + (maxAcceleration - baseAcceleration) * distanceAcceleration;
-          
-          // Blend gravitational attraction with final orbital motion
-          // Early in transition: pure gravitational attraction
-          // Later in transition: blend toward orbital motion
-          const attractionWeight = Math.max(0, 1.0 - transitionProgress * 1.5); // Reduces as transition progresses
-          const orbitalWeight = Math.min(1.0, transitionProgress * 1.5); // Increases as transition progresses
-          
-          if (attractionWeight > 0) {
-            // Gravitational attraction toward sphere center
-            const directionX = spherePosition.x - currentX;
-            const directionY = spherePosition.y - currentY;
-            const directionZ = spherePosition.z - currentZ;
-            
-            // Apply acceleration based on distance
-            const attractionX = currentX + directionX * accelerationFactor;
-            const attractionY = currentY + directionY * accelerationFactor;
-            const attractionZ = currentZ + directionZ * accelerationFactor;
-            
-            // Blend attraction with orbital motion
-            positions[i3] = attractionX * attractionWeight + finalX * orbitalWeight;
-            positions[i3 + 1] = attractionY * attractionWeight + finalY * orbitalWeight;
-            positions[i3 + 2] = attractionZ * attractionWeight + finalZ * orbitalWeight;
-          } else {
-            // Pure orbital motion when attraction phase is complete
-            positions[i3] = finalX;
-            positions[i3 + 1] = finalY;
-            positions[i3 + 2] = finalZ;
-          }
-        } else {
-          // After transition: pure orbital motion (already calculated above)
-          positions[i3] = finalX;
-          positions[i3 + 1] = finalY;
-          positions[i3 + 2] = finalZ;
-        }
+        positions[i3] = currentX + (targetX - currentX) * lerpSpeed;
+        positions[i3 + 1] = currentY + (targetY - currentY) * lerpSpeed;
+        positions[i3 + 2] = currentZ + (targetZ - currentZ) * lerpSpeed;
       }
     } else if (swarmMode === 'returning') {
       // Returning mode: particles transition back to their original positions
