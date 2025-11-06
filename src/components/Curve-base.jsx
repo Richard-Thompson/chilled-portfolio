@@ -274,12 +274,12 @@ export default function PlaneInstancerWithColor({
             // Account for grass group rotation: [-PI/2, 0, 0] 
             // This rotates XYZ -> XZY (Y and Z are swapped)
             // Sphere is in world space, grass is rotated, so we need to transform sphere pos
-            vec3 transformedSpherePos = vec3(spherePos.x, spherePos.z, -spherePos.y + 0.35);
+            vec3 transformedSpherePos = vec3(spherePos.x, spherePos.z, spherePos.y + 0.35);
             
             // Calculate distance from grass to sphere (XZ plane in grass space)
             vec2 grassXZ = worldPos.xz;
             vec2 sphereXZ = transformedSpherePos.xz;
-            float distance = length(grassXZ - sphereXZ);
+            float distance = distance(grassXZ, sphereXZ);
             
             // Apply bending if grass is within radius
             if (distance < bendRadius) {
@@ -291,7 +291,7 @@ export default function PlaneInstancerWithColor({
               
               // Apply bending (simple X,Z displacement)
               bentPosition.x += bendDir.x * strength;
-              bentPosition.z += bendDir.y * strength;
+              bentPosition.y += bendDir.y * strength;
             }
             
             transformed = bentPosition;
