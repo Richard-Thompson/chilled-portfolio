@@ -242,62 +242,55 @@ export default function PlaneInstancerWithColor({
         waveStrength: { value: DEFAULT_WAVE_STRENGTH },
         waveSpeed: { value: DEFAULT_WAVE_SPEED },
         waveScale: { value: DEFAULT_WAVE_SCALE },
-        bendRadius: { value: 5.0 },
-        bendStrength: { value: 3.0 }
+        bendRadius: { value: 3.70 },
+        bendStrength: { value: 0.80 }
       });
 
-      // Optimized vertex shader with grass bending
       shader.vertexShader = `
-        attribute float aTextureIndex;
-        varying float vTextureIndex;
-        varying vec2 vUv;
-        varying vec3 vPos;
-        uniform vec3 spherePos;
-        uniform float bendRadius;
-        uniform float bendStrength;
-        
-        ${shader.vertexShader.replace(
-          "#include <begin_vertex>",
-          `
-                      #include <begin_vertex>
- 
-          vTextureIndex = aTextureIndex;
-            vUv = uv;
-            
-            // Start with original position
-            vec3 bentPosition = position;
-            
-            // Calculate world position of this grass instance
-            vec4 worldPos = instanceMatrix * vec4(position, 1.0);
-            vPos = worldPos.xyz;
-            
-            // Account for grass group rotation: [-PI/2, 0, 0] 
-            // This rotates XYZ -> XZY (Y and Z are swapped)
-            // Sphere is in world space, grass is rotated, so we need to transform sphere pos
-            vec3 transformedSpherePos = vec3(spherePos.x, spherePos.z, spherePos.y + 0.35);
-            
-            // Calculate distance from grass to sphere (XZ plane in grass space)
-            vec2 grassXZ = worldPos.xz;
-            vec2 sphereXZ = transformedSpherePos.xz;
-            float distance = distance(grassXZ, sphereXZ);
-            
-            // Apply bending if grass is within radius
-            if (distance < bendRadius) {
-              // Direction away from sphere
-              vec2 bendDir = normalize(grassXZ - sphereXZ);
-              
-              // Bend strength: stronger closer to sphere, affects top of grass more
-              float strength = (1.0 - distance / bendRadius) * bendStrength * uv.y;
-              
-              // Apply bending (simple X,Z displacement)
-              bentPosition.x += bendDir.x * strength;
-              bentPosition.y += bendDir.y * strength;
-            }
-            
-            transformed = bentPosition;
-          `
-        )}
-      `;
+  attribute float aTextureIndex;
+  varying float vTextureIndex;
+  varying vec2 vUv;
+  varying vec3 vPos;
+
+  uniform vec3 spherePos;
+  uniform float bendRadius;
+  uniform float bendStrength;
+
+  ${shader.vertexShader.replace(
+    "#include <begin_vertex>",
+    `
+      #include <begin_vertex>
+
+      vTextureIndex = aTextureIndex;
+      vUv = uv;
+
+      vec3 sPos = spherePos;
+      vec3 gPos = (modelMatrix * instanceMatrix * vec4(position, 1.0)).xyz;
+
+      bool isInsideSphere = distance(gPos, sPos) < bendRadius;
+
+      // Only bend if within radius
+      if (isInsideSphere) {
+        // Direction away from sphere
+        vec2 bendDir = normalize(gPos.xz - sPos.xz);
+
+        // Bend intensity: falloff with distance
+        float influence = 1.0 - (distance(gPos, sPos) / bendRadius);
+
+        // Apply bending only to upper parts (based on vertex height)
+        float heightFactor = position.y; // assuming y=0 at root, 1 at tip
+
+        // Final bend strength
+        float bend = bendStrength * influence * heightFactor;
+
+        // Apply bending in XZ plane
+        transformed.x += bendDir.x * bend;
+        transformed.z += bendDir.y * bend;
+      }
+    `
+  )}
+`;
+
 
       // Optimized fragment shader with wave controls and performance uniforms
       shader.fragmentShader = `
