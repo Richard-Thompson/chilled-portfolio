@@ -6,7 +6,7 @@ import { useFrame } from '@react-three/fiber';
 const RIBBON_COUNT = 4; // Four corner ribbons: top-right, top-left, bottom-left, bottom-right
 const MAX_TRAIL_POINTS = 20; // Increased for longer ribbons
 const RIBBON_WIDTH = 0.25;
-const SPAWN_DISTANCE = 1.0;
+const SPAWN_DISTANCE = 0.8; // Balanced distance from sphere center
 const TRAIL_LIFETIME = 3500; // Increased for longer ribbons
 const MOVEMENT_THRESHOLD = 0.03; // Increased to reduce updates
 const UPDATE_FREQUENCY = 3; // Update every 3rd frame for 60fps target
@@ -71,14 +71,14 @@ const OptimizedRibbons = ({ sphereRef, enabled = true, mode = 'both' }) => {
     return materials;
   }, []);
 
-  // Create ribbon spawn angles for four corners: top-right, top-left, bottom-left, bottom-right
+  // Create ribbon spawn angles with balanced positioning around the back of the sphere
   const spawnAngles = useMemo(() => {
-    // Define the four corner positions in 3D space around the back of the sphere
+    // Define four positions with moderate spread around the back of the sphere
     return [
-      { angle: Math.PI * 1.25, height: 0.3, label: 'top-right' },    // 225° - back right, elevated
-      { angle: Math.PI * 0.75, height: 0.3, label: 'top-left' },     // 135° - back left, elevated  
-      { angle: Math.PI * 0.75, height: -0.2, label: 'bottom-left' }, // 135° - back left, lowered
-      { angle: Math.PI * 1.25, height: -0.2, label: 'bottom-right' } // 225° - back right, lowered
+      { angle: Math.PI * 1.2, height: 0.2, label: 'top-right' },    // 216° - moderately spread from back center, elevated
+      { angle: Math.PI * 0.8, height: 0.2, label: 'top-left' },     // 144° - moderately spread from back center, elevated  
+      { angle: Math.PI * 0.8, height: -0.15, label: 'bottom-left' }, // 144° - moderately spread from back center, lowered
+      { angle: Math.PI * 1.2, height: -0.15, label: 'bottom-right' } // 216° - moderately spread from back center, lowered
     ];
   }, []);
 

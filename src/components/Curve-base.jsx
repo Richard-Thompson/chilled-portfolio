@@ -244,7 +244,7 @@ export default function PlaneInstancerWithColor({
         waveSpeed: { value: DEFAULT_WAVE_SPEED },
         waveScale: { value: DEFAULT_WAVE_SCALE },
         bendRadius: { value: 4.0 },
-        bendStrength: { value: 1.2 },
+        bendStrength: { value: .6 },
         // Trail system uniforms
         trailPositions: { value: new Float32Array(60) }, // 20 positions * 3 components
         trailTimes: { value: new Float32Array(20) }, // Time when each trail point was created
@@ -252,7 +252,7 @@ export default function PlaneInstancerWithColor({
         currentTime: { value: 0.0 },
         trailRecoveryTime: { value: 3.0 }, // Time for grass to fully recover
         // Smooth animation uniforms
-        bendingSpeed: { value: .10 }, // How fast grass transitions to bend positions
+        bendingSpeed: { value: .90 }, // How fast grass transitions to bend positions
         deltaTime: { value: 0.00096 } // Frame delta time for smooth interpolation
       });
 
