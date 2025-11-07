@@ -1,10 +1,7 @@
 import React, { useRef, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
-import SpeedRibbons from './SpeedRibbons';
-import SpeedTrails from './SpeedTrails';
-import TestRibbon from './TestRibbon';
-import ProperRibbons from './ProperRibbons';
+import OptimizedRibbons from './OptimizedRibbons';
 
 // Constants for smooth movement and camera behavior
 const SPHERE_MOVE_SPEED = 0.01; // How fast sphere moves to target
@@ -39,7 +36,6 @@ const MovingSphere = React.forwardRef(({ onSphereMove, ribbonMode = 'both' }, re
   const cameraOffsetRef = useRef(new THREE.Vector3(-CAMERA_DISTANCE, 0, 0));
   const isInitializedRef = useRef(false);
   const baseMeshRef = useRef(null);
-  const [currentPosition, setCurrentPosition] = React.useState(new THREE.Vector3(0, SPHERE_HEIGHT_OFFSET, 0)); // Use state for ribbons
 
   // Initialize sphere and camera positions
   const initializePositions = useCallback(() => {
@@ -108,7 +104,7 @@ const MovingSphere = React.forwardRef(({ onSphereMove, ribbonMode = 'both' }, re
           const isNotParticle = !childName.includes('particle') && !childName.includes('point');
           
           if (isNotGrass && isNotInstanced && isNotRibbon && isNotParticle) {
-            console.log('✅ Found base mesh:', childName || 'unnamed', 'geometry vertices:', child.geometry.attributes.position?.count);
+            // Found base mesh (no logging for performance)
             baseMeshRef.current = child;
             return; // Stop searching once we find it
           }
@@ -144,10 +140,7 @@ const MovingSphere = React.forwardRef(({ onSphereMove, ribbonMode = 'both' }, re
         const groundHeight = intersects[0].point.y;
         nextYHeight = groundHeight + SPHERE_HEIGHT_OFFSET; // Always 1.2 units above the ground at current XZ position
         
-        // Debug logging to verify correct height calculation (reduced frequency)
-        if (Math.random() < 0.02) { // Only log 2% of the time to reduce console spam
-          console.log(`✅ Raycast hit - XZ: (${nextX.toFixed(2)}, ${nextZ.toFixed(2)}), Ground: ${groundHeight.toFixed(3)}, Sphere: ${nextYHeight.toFixed(3)} (Ground + ${SPHERE_HEIGHT_OFFSET})`);
-        }
+        // Raycast successful - no logging needed for performance
       } else {
         // If raycast fails, try to interpolate Y position smoothly to avoid jumps
         const targetY = THREE.MathUtils.lerp(
@@ -157,10 +150,7 @@ const MovingSphere = React.forwardRef(({ onSphereMove, ribbonMode = 'both' }, re
         );
         nextYHeight = targetY;
         
-        if (Math.random() < 0.1) { // Log raycast failures more frequently to debug
-          console.log(`❌ No raycast hit at XZ: (${nextX.toFixed(2)}, ${nextZ.toFixed(2)}), using interpolated Y: ${nextYHeight.toFixed(3)}`);
-          console.log(`   Base mesh:`, baseMeshRef.current.name || 'unnamed', 'vertices:', baseMeshRef.current.geometry?.attributes.position?.count);
-        }
+        // Raycast failed - using interpolated Y (no logging for performance)
       }
     } else {
       // No base mesh found yet, use smooth interpolation to target
@@ -170,7 +160,7 @@ const MovingSphere = React.forwardRef(({ onSphereMove, ribbonMode = 'both' }, re
         SPHERE_MOVE_SPEED
       );
       nextYHeight = targetY;
-      console.log(`❌ No base mesh found yet, using interpolated Y: ${nextYHeight.toFixed(3)}`);
+      // No base mesh found yet - using interpolated Y (no logging for performance)
     }
     
     // Set the sphere position with the calculated height at the current XZ position
@@ -179,8 +169,7 @@ const MovingSphere = React.forwardRef(({ onSphereMove, ribbonMode = 'both' }, re
     sphereRef.current.position.z = nextZ;
     sphereRef.current.position.y = nextYHeight; // Use the calculated height directly, no interpolation
 
-    // Update current position state for ribbons
-    setCurrentPosition(sphereRef.current.position.clone());
+    // Position is now accessed directly by ribbons via sphereRef
 
     // Notify parent of the sphere's current actual position every frame
     if (onSphereMove) {
@@ -223,17 +212,10 @@ const MovingSphere = React.forwardRef(({ onSphereMove, ribbonMode = 'both' }, re
         castShadow
         receiveShadow
       />
-      <TestRibbon 
-        spherePosition={currentPosition}
+      <OptimizedRibbons 
+        sphereRef={sphereRef}
         enabled={ribbonMode !== 'off'}
-      />
-      <ProperRibbons 
-        spherePosition={currentPosition}
-        enabled={ribbonMode === 'basic' || ribbonMode === 'both'}
-      />
-      <SpeedTrails 
-        spherePosition={currentPosition} 
-        enabled={ribbonMode === 'speed' || ribbonMode === 'both'}
+        mode={ribbonMode}
       />
     </group>
   );

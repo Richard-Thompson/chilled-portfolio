@@ -520,14 +520,7 @@ export default function PlaneInstancerWithColor({
     shader.uniforms.currentTime.value = currentTime;
     shader.uniforms.deltaTime.value = Math.min(deltaTime, 0.033); // Cap at ~30fps for stability
     
-    // Debug: Log trail info every 120 frames
-    if (frameCounter.current % 120 === 0) {
-      console.log('Trail system:', {
-        trailCount: Math.min(trailIndex.current, 20),
-        currentPos: `${currentPos.x.toFixed(2)}, ${currentPos.y.toFixed(2)}, ${currentPos.z.toFixed(2)}`,
-        lastTrailTime: trailTimes.current[(trailIndex.current - 1) % 20]?.toFixed(2)
-      });
-    }
+    // Trail system running (no logging for performance)
   });
 
   // Optimized instance data setup with early returns
@@ -581,14 +574,7 @@ export default function PlaneInstancerWithColor({
 
   // Handle sphere movement updates
   const handleSphereMove = useCallback((newPosition) => {
-    // Debug: Log sphere movement
-    console.log('🌀 Sphere moved to:', {
-      x: newPosition.x.toFixed(2),
-      y: newPosition.y.toFixed(2),
-      z: newPosition.z.toFixed(2)
-    });
-    
-    // Update sphere position for grass bending
+    // Update sphere position for grass bending (no logging for performance)
     spherePosRef.current.copy(newPosition);
     
     // Pass sphere position to parent component

@@ -194,7 +194,7 @@ function App() {
         <Canvas 
           gl={GL_CONFIG} 
           camera={CAMERA_CONFIG}
-          dpr={[1, 1]} // Limit device pixel ratio for performance
+          dpr={[0.5, 0.9]} // Limit device pixel ratio for performance
           performance={{ min: 0.5 }} // Performance monitoring
         >
           {sceneComponents}
