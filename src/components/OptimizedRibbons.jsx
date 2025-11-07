@@ -137,7 +137,15 @@ const OptimizedRibbons = ({ sphereRef, enabled = true, mode = 'both' }) => {
     // Base spawn distance
     const spawnDistance = SPAWN_DISTANCE;
     
-    if (velocity.length() > 0.001) {
+    // Calculate velocity strength for smooth interpolation
+    const velocityLength = velocity.length();
+    const velocityStrength = Math.min(velocityLength / 0.1, 1.0); // Normalize to 0-1 over 0.1 units/sec
+    
+    // Static corner position (default state)
+    const staticX = Math.cos(angle) * spawnDistance;
+    const staticZ = Math.sin(angle) * spawnDistance;
+    
+    if (velocityLength > 0.001) {
       // When moving, rotate the corner pattern to align with movement direction
       const velNorm = velocity.clone().normalize();
       
@@ -152,17 +160,21 @@ const OptimizedRibbons = ({ sphereRef, enabled = true, mode = 'both' }) => {
       const rotatedX = localX * Math.cos(movementYaw) - localZ * Math.sin(movementYaw);
       const rotatedZ = localX * Math.sin(movementYaw) + localZ * Math.cos(movementYaw);
       
+      // Smoothly interpolate between static and dynamic positioning
+      const finalX = THREE.MathUtils.lerp(staticX, rotatedX, velocityStrength);
+      const finalZ = THREE.MathUtils.lerp(staticZ, rotatedZ, velocityStrength);
+      
       return new THREE.Vector3(
-        rotatedX,
+        finalX,
         height, // Use the corner-specific height (positive = top, negative = bottom)
-        rotatedZ
+        finalZ
       );
     } else {
       // No velocity - static corner positioning
       return new THREE.Vector3(
-        Math.cos(angle) * spawnDistance,
+        staticX,
         height, // Use the corner-specific height
-        Math.sin(angle) * spawnDistance
+        staticZ
       );
     }
   }, [spawnAngles]);
