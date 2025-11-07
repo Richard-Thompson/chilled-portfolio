@@ -1,0 +1,90 @@
+.ribbon-controls {
+  position: fixed;
+  top: 120px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 20px;
+  color: white;
+  font-family: 'Arial', sans-serif;
+  min-width: 280px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+
+.ribbon-controls h3 {
+  margin: 0 0 15px 0;
+  font-size: 16px;
+  font-weight: bold;
+  color: #00ffff;
+  text-align: center;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
+.ribbon-mode-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.ribbon-mode-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  color: white;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.ribbon-mode-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(0, 255, 255, 0.6);
+  transform: translateY(-1px);
+}
+
+.ribbon-mode-btn.active {
+  background: rgba(0, 255, 255, 0.3);
+  border-color: #00ffff;
+  color: #00ffff;
+  box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+}
+
+.ribbon-info {
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 12px;
+}
+
+.ribbon-info p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: center;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .ribbon-controls {
+    top: 80px;
+    right: 10px;
+    left: 10px;
+    min-width: auto;
+    max-width: none;
+  }
+  
+  .ribbon-mode-buttons {
+    grid-template-columns: 1fr;
+  }
+  
+  .ribbon-mode-btn {
+    font-size: 14px;
+    padding: 10px;
+  }
+}

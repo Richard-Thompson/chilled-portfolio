@@ -95,6 +95,7 @@ export default function PlaneInstancerWithColor({
   castShadow = false,
   receiveShadow = false,
   onSphereMove = null, // Callback for sphere movement
+  ribbonMode = 'both', // Ribbon effect mode
 }) {
   const meshRef = useRef();
   const shaderRef = useRef();
@@ -602,6 +603,7 @@ export default function PlaneInstancerWithColor({
       <MovingSphere 
         ref={movingSphereRef}
         onSphereMove={handleSphereMove}
+        ribbonMode={ribbonMode}
       />
       <axesHelper />
       <group {...groupProps}>

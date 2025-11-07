@@ -13,6 +13,7 @@ const PerformanceMonitor = React.lazy(() => import('./components/PerformanceMoni
 const SwarmControl = React.lazy(() => import('./components/SwarmControl'));
 const ParticleControls = React.lazy(() => import('./components/ParticleControls'));
 const PostProcessing = React.lazy(() => import('./components/PostProcessing'));
+const RibbonControls = React.lazy(() => import('./components/RibbonControls'));
 
 // Pre-computed constants for performance
 const KEYBOARD_MAP = [
@@ -63,6 +64,7 @@ function App() {
   const [isSwarmButtonDisabled, setIsSwarmButtonDisabled] = React.useState(false);
   const [spherePosition, setSpherePosition] = React.useState(null);
   const [showControls, setShowControls] = React.useState(false);
+  const [ribbonMode, setRibbonMode] = React.useState('both'); // 'off', 'basic', 'speed', 'both'
   const [particleControls, setParticleControls] = React.useState({
     speed: 0.8,
     chaos: 1.5,
@@ -109,6 +111,11 @@ function App() {
   // Handle particle control changes
   const handleParticleControlChange = React.useCallback((newControls) => {
     setParticleControls(newControls);
+  }, []);
+
+  // Handle ribbon mode changes
+  const handleRibbonModeChange = React.useCallback((newMode) => {
+    setRibbonMode(newMode);
   }, []);
 
   // Handle return transition complete
@@ -166,7 +173,7 @@ function App() {
   const sceneComponents = useMemo(() => (
     <Suspense fallback={<LoadingFallback />}>
       <Hdri />
-      <Model onSphereMove={handleSphereMove} />
+      <Model onSphereMove={handleSphereMove} ribbonMode={ribbonMode} />
       {/* <Sparkles /> */}
       <AmbientParticles 
         {...particleConfig} 
@@ -179,7 +186,7 @@ function App() {
       <primitive object={FOG} attach="fog" />
       <PostProcessing />
     </Suspense>
-  ), [particleConfig, spherePosition, swarmMode, particleControls, handleSphereMove]);
+  ), [particleConfig, spherePosition, swarmMode, particleControls, handleSphereMove, ribbonMode]);
 
   return (
     <div className="App">
@@ -204,6 +211,13 @@ function App() {
           controls={particleControls}
           onControlChange={handleParticleControlChange}
           isVisible={showControls}
+        />
+      </Suspense>
+      <Suspense fallback={null}>
+        <RibbonControls 
+          ribbonMode={ribbonMode}
+          onRibbonModeChange={handleRibbonModeChange}
+          isVisible={true}
         />
       </Suspense>
     </div>
